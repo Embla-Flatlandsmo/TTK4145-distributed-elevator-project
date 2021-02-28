@@ -8,7 +8,7 @@ use std::io::*;
 
 
 #[derive(Clone, Debug)]
-pub struct Elevator {
+pub struct ElevatorHW {
         socket:     Arc<Mutex<TcpStream>>,
     pub num_floors: u8,
 }
@@ -22,9 +22,9 @@ pub const DIRN_DOWN:    u8 = u8::MAX;
 pub const DIRN_STOP:    u8 = 0;
 pub const DIRN_UP:      u8 = 1;
 
-impl Elevator {
+impl ElevatorHW {
 
-    pub fn init(addr: &str, num_floors: u8) -> Result<Elevator> {
+    pub fn init(addr: &str, num_floors: u8) -> Result<ElevatorHW> {
         Ok(Self {
             socket: Arc::new(Mutex::new( TcpStream::connect(addr)? )),
             num_floors: num_floors,
@@ -102,7 +102,7 @@ impl Elevator {
 }
 
 
-impl fmt::Display for Elevator {
+impl fmt::Display for ElevatorHW {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let addr = self.socket.lock().unwrap().peer_addr().unwrap();
         write!(f, "Elevator@{}({})", addr, self.num_floors)

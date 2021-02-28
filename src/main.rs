@@ -102,7 +102,7 @@ fn main() -> std::io::Result<()> {
     println!("Elevator started:\n{:#?}", elevator);    
 
     
-    let poll_period = Duration::from_millis(25);
+    let poll_period = time::Duration::from_millis(25);
     
     let (call_button_tx, call_button_rx) = cbc::unbounded::<driver::poll::CallButton>();
     {
