@@ -1,0 +1,17 @@
+[package]
+name = "project-gruppe47"
+version = "0.1.0"
+authors = ["Embla Flatlandsmo <embla.flatlandsmo@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+socket2 = "0.3.19"
+crossbeam-channel = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "network-rust"
+path = "src/main.rs"
