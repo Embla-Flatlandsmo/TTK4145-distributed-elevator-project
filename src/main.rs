@@ -8,16 +8,16 @@ use crossbeam_channel as cbc;
 use serde;
 
 
-mod udpnet {
+mod network {
     pub mod peers;
     pub mod bcast;
 }
 
-mod elevio {
+mod driver {
     pub mod elev;
     pub mod poll;
 }
-use elevio::elev as e;
+use driver::elev as e;
 
 // Data types to be sent on the network must derive traits for serialization
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -48,7 +48,7 @@ fn main() -> std::io::Result<()> {
     {
         let id = id.clone();
         spawn(move ||{
-            udpnet::peers::tx(peer_port, id, peer_tx_enable_rx);
+            network::peers::tx(peer_port, id, peer_tx_enable_rx);
         });
     }
     // (periodically disable/enable the peer broadcast, to provoke new peer / peer loss messages)
@@ -62,9 +62,9 @@ fn main() -> std::io::Result<()> {
     });
     
     // The receiver for peer discovery updates
-    let (peer_update_tx, peer_update_rx) = cbc::unbounded::<udpnet::peers::PeerUpdate>();
+    let (peer_update_tx, peer_update_rx) = cbc::unbounded::<network::peers::PeerUpdate>();
     spawn(move ||{
-        udpnet::peers::rx(peer_port, peer_update_tx);
+        network::peers::rx(peer_port, peer_update_tx);
     });
     
     
@@ -86,12 +86,12 @@ fn main() -> std::io::Result<()> {
     }
     // The sender for our custom data
     spawn(move ||{
-        udpnet::bcast::tx(msg_port, custom_data_send_rx);
+        network::bcast::tx(msg_port, custom_data_send_rx);
     });
     // The receiver for our custom data
     let (custom_data_recv_tx, custom_data_recv_rx) = cbc::unbounded::<CustomDataType>();
     spawn(move ||{
-        udpnet::bcast::rx(msg_port, custom_data_recv_tx);
+        network::bcast::rx(msg_port, custom_data_recv_tx);
     });
 
 
@@ -104,11 +104,11 @@ fn main() -> std::io::Result<()> {
     
     let poll_period = Duration::from_millis(25);
     
-    let (call_button_tx, call_button_rx) = cbc::unbounded::<elevio::poll::CallButton>();
+    let (call_button_tx, call_button_rx) = cbc::unbounded::<driver::poll::CallButton>();
     {
         let elevator = elevator.clone();
         spawn(move ||{
-            elevio::poll::call_buttons(elevator, call_button_tx, poll_period) 
+            driver::poll::call_buttons(elevator, call_button_tx, poll_period) 
         });
     }
     
@@ -116,7 +116,7 @@ fn main() -> std::io::Result<()> {
     {
         let elevator = elevator.clone();
         spawn(move ||{
-            elevio::poll::floor_sensor(elevator, floor_sensor_tx, poll_period)
+            driver::poll::floor_sensor(elevator, floor_sensor_tx, poll_period)
         });
     }
     
@@ -124,7 +124,7 @@ fn main() -> std::io::Result<()> {
     {
         let elevator = elevator.clone();
         spawn(move ||{
-            elevio::poll::stop_button(elevator, stop_button_tx, poll_period)
+            driver::poll::stop_button(elevator, stop_button_tx, poll_period)
         });
     }
     
@@ -132,7 +132,7 @@ fn main() -> std::io::Result<()> {
     {
         let elevator = elevator.clone();
         spawn(move ||{
-            elevio::poll::obstruction(elevator, obstruction_tx, poll_period)
+            driver::poll::obstruction(elevator, obstruction_tx, poll_period)
         });
     }
     
