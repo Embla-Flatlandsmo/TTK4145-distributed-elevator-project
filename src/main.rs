@@ -17,6 +17,11 @@ mod driver {
     pub mod elev;
     pub mod poll;
 }
+
+mod requests {
+    pub mod requests;
+}
+
 use driver::elev as e;
 
 // Data types to be sent on the network must derive traits for serialization
@@ -28,8 +33,8 @@ struct CustomDataType {
 
 
 fn main() -> std::io::Result<()> {
-
     // Genreate id: either from command line, or a default rust@ip#pid
+    println!("{:?}", DIRN::DIRN_UP.toString())
     let args: Vec<String> = env::args().collect();
     let id = if args.len() > 1 {
         args[1].clone()

@@ -5,14 +5,17 @@ enum ElevatorBehaviour {
 }
 
 struct Elevator {
-    behaviour: ElevatorBehaviour,
     hw: ElevatorHW,
-    floor: i32,
-    //orders : [num_floors][call_buttons],
+    pub floor: u8,
+    behaviour: ElevatorBehaviour,
+    orders : [num_floors][call_buttons],
 }
 
-fn chooseDirection(Elevator e) {/* ... */}
-
-fn shouldStop(Elevator e) {/* ... */}
-
-fn clearRequests(Elevator e) {/* ... */}
+impl Elevator {
+    init 
+}
+fn setAllLights(Elevator e) {/*...*/}
+fn fsm_onInitBetweenFloors() {/*...*/}
+fn fsm_onRequestButtonPress(btn_floor: u8, button_type: CallButton) {/*...*/}
+fn fsm_onFloorArrival(new_floor: u8) {/*...*/}
+fn fsm_onDoorTimeout() {/*...*/}
