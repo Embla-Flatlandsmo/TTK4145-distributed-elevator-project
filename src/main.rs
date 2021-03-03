@@ -13,16 +13,16 @@ mod network {
     pub mod bcast;
 }
 
-mod driver {
+mod elevio {
     pub mod elev;
     pub mod poll;
 }
 
-mod requests {
-    pub mod requests;
+mod fsm {
+    pub mod fsm;
 }
 
-use driver::elev as e;
+use elevio::elev as e;
 
 // Data types to be sent on the network must derive traits for serialization
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -103,17 +103,17 @@ fn main() -> std::io::Result<()> {
 
 /*----------------------------------------------------------------------*/
     let elev_num_floors = 4;
-    let elevator = e::Elevator::init("localhost:15657", elev_num_floors)?;
+    let elevator = e::ElevatorHW::init("localhost:15657", elev_num_floors)?;
     println!("Elevator started:\n{:#?}", elevator);    
 
     
     let poll_period = time::Duration::from_millis(25);
     
-    let (call_button_tx, call_button_rx) = cbc::unbounded::<driver::poll::CallButton>();
+    let (call_button_tx, call_button_rx) = cbc::unbounded::<elevio::poll::CallButton>();
     {
         let elevator = elevator.clone();
         spawn(move ||{
-            driver::poll::call_buttons(elevator, call_button_tx, poll_period) 
+            elevio::poll::call_buttons(elevator, call_button_tx, poll_period) 
         });
     }
     
@@ -121,7 +121,7 @@ fn main() -> std::io::Result<()> {
     {
         let elevator = elevator.clone();
         spawn(move ||{
-            driver::poll::floor_sensor(elevator, floor_sensor_tx, poll_period)
+            elevio::poll::floor_sensor(elevator, floor_sensor_tx, poll_period)
         });
     }
     
@@ -129,7 +129,7 @@ fn main() -> std::io::Result<()> {
     {
         let elevator = elevator.clone();
         spawn(move ||{
-            driver::poll::stop_button(elevator, stop_button_tx, poll_period)
+            elevio::poll::stop_button(elevator, stop_button_tx, poll_period)
         });
     }
     
@@ -137,14 +137,25 @@ fn main() -> std::io::Result<()> {
     {
         let elevator = elevator.clone();
         spawn(move ||{
-            driver::poll::obstruction(elevator, obstruction_tx, poll_period)
+            elevio::poll::obstruction(elevator, obstruction_tx, poll_period)
         });
     }
     
+    let (door_timer_tx, door_timer_rx) = cbc::unbounded::<bool>();
+    {
+        /* Some logic for spawning timer thread
+        
+        Perhaps this could be made in the timer module?
+        
+        In any case, it needs to send a message so it can be spotted in the select loop */
+
+    }
+
+    /* Some logic for initializing the state machine */
     
     let mut dirn = e::DIRN_DOWN;
     if elevator.floor_sensor().is_none() {
-        elevator.motor_direction(dirn);
+        fsm::fsm_onInitBetweenFloors();
     }
     
     
@@ -162,38 +173,42 @@ fn main() -> std::io::Result<()> {
         }
 
         cbc::select! {
-        recv(call_button_rx) -> a => {
-            let call_button = a.unwrap();
-            println!("{:#?}", call_button);
-            elevator.call_button_light(call_button.floor, call_button.call, true);
-        },
-        recv(floor_sensor_rx) -> a => {
-            let floor = a.unwrap();
-            println!("Floor: {:#?}", floor);
-            dirn = 
-                if floor == 0 {
-                    e::DIRN_UP
-                } else if floor == elev_num_floors-1 {
-                    e::DIRN_DOWN
-                } else {
-                    dirn
-                };
-            elevator.motor_direction(dirn);
-        },
-        recv(stop_button_rx) -> a => {
-            let stop = a.unwrap();
-            println!("Stop button: {:#?}", stop);
-            for f in 0..elev_num_floors {
-                for c in 0..3 {
-                    elevator.call_button_light(f, c, false);
+            recv(call_button_rx) -> a => {
+                /* Logic for starting to move elevator THROUGH the fsm (right now at least) */
+                let call_button = a.unwrap();
+                println!("{:#?}", call_button);
+                elevator.call_button_light(call_button.floor, call_button.call, true);
+            },
+            recv(floor_sensor_rx) -> a => {
+                let floor = a.unwrap();
+                println!("Floor: {:#?}", floor);
+                /*
+                dirn = 
+                    if floor == 0 {
+                        e::DIRN_UP
+                    } else if floor == elev_num_floors-1 {
+                        e::DIRN_DOWN
+                    } else {
+                        dirn
+                    };
+                elevator.motor_direction(dirn);
+                */
+            },
+            recv(stop_button_rx) -> a => {
+                let stop = a.unwrap();
+                println!("Stop button: {:#?}", stop);
+                for f in 0..elev_num_floors {
+                    for c in 0..3 {
+                        elevator.call_button_light(f, c, false);
+                    }
                 }
-            }
-        },
-        recv(obstruction_rx) -> a => {
-            let obstr = a.unwrap();
-            println!("Obstruction: {:#?}", obstr);
-            elevator.motor_direction(if obstr { e::DIRN_STOP } else { dirn });
-        },
+            },
+            recv(obstruction_rx) -> a => {
+                let obstr = a.unwrap();
+                /* Logic for restarting the timer */
+                println!("Obstruction: {:#?}", obstr);
+                elevator.motor_direction(if obstr { e::DIRN_STOP } else { dirn });
+            },
     	}
     }
 
