@@ -33,6 +33,7 @@ struct CustomDataType {
 
 
 fn main() -> std::io::Result<()> {
+    /* ------------------NETWORK----------------- */
     // Genreate id: either from command line, or a default rust@ip#pid
     println!("{:?}", DIRN::DIRN_UP.toString())
     let args: Vec<String> = env::args().collect();
@@ -101,11 +102,17 @@ fn main() -> std::io::Result<()> {
 
 
 
-/*----------------------------------------------------------------------*/
+    /*----------------SINGLE ELEVATOR---------------------*/
     let elev_num_floors = 4;
     let elevator = e::ElevatorHW::init("localhost:15657", elev_num_floors)?;
     println!("Elevator started:\n{:#?}", elevator);    
 
+
+    /* We should do something about all these fsms :^) 
+    * Here, we initialize the fsm and transitions it into downwards moving (is there a better way to solve this?)
+    */
+    let mut elestator: fsm::fsm::FSM = fsm::fsm::FSM::new(elestator);
+    elestator = fsm::fsm::FSM::<Moving>::from(elestator);
     
     let poll_period = time::Duration::from_millis(25);
     
@@ -150,13 +157,6 @@ fn main() -> std::io::Result<()> {
         In any case, it needs to send a message so it can be spotted in the select loop */
 
     }
-
-    /* Some logic for initializing the state machine */
-    
-    let mut dirn = e::DIRN_DOWN;
-    if elevator.floor_sensor().is_none() {
-        fsm::fsm_onInitBetweenFloors();
-    }
     
     
     // main body: receive peer updates and data from the network
@@ -182,6 +182,7 @@ fn main() -> std::io::Result<()> {
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
                 println!("Floor: {:#?}", floor);
+                elestator = FSM::<Moving>::from(elestator); //update fsm if we detect new floor sensor
                 /*
                 dirn = 
                     if floor == 0 {
