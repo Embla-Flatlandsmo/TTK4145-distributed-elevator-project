@@ -1,3 +1,5 @@
+
+#![allow(dead_code)]
 /*enum ElevatorBehaviour {
     Idle,
     Moving,
@@ -13,7 +15,7 @@
  */
 
 #[path = "../elevio/elev.rs"] mod elevio;
-#[path = "../timer/timer.rs"] mod timer;
+#[path = "../timer/timer.rs"] pub mod timer;
 
 /* Structs */
 struct FSM<ElevatorBehaviour> {
@@ -28,10 +30,9 @@ struct Moving {
     drivingDirection: u8
 }
 struct DoorOpen {
-    timer: timer::Timer
+    door_timer: timer::Timer
 }
-
-
+pub const DOOR_OPEN_TIME:    u64 = 3;
 /**
  * -----------------------------------------------------TRANSITION IMPLEMENTATIONS-----------------------------------------------------
  * 
@@ -76,8 +77,10 @@ impl From<FSM<Initializing>> for FSM<Moving> {
  */
 // Idle->Moving
 impl From<FSM<Idle>> for FSM<Moving> {
-    fn from(val: FSM<Idle>, dirn: u8) -> FSM<Moving> {
+    fn from(val: FSM<Idle>) -> FSM<Moving> {
         // Todo: Disallow any value but DIRN_DOWN/STOP/UP
+        // Figure out motor direction
+        let dirn = elevio::DIRN_DOWN;
         val.hw.motor_direction(dirn);
         FSM {
             hw: val.hw,
@@ -90,13 +93,12 @@ impl From<FSM<Idle>> for FSM<Moving> {
 // Idle->DoorOpen
 impl From<FSM<Idle>> for FSM<DoorOpen> {
     fn from(val: FSM<Idle>) -> FSM<DoorOpen> {
-        timer: timer::timer_start();
         val.hw.door_light(true);
         //val.hw.call_button_light(floor: u8, call: u8, on: bool); //Some function to clear light
         FSM {
             hw: val.hw,
             floor: val.floor,
-            behaviour: DoorOpen { timer }
+            behaviour: DoorOpen { door_timer: timer::timer_start(DOOR_OPEN_TIME) }
         }
     }
 }
@@ -107,7 +109,9 @@ impl From<FSM<Idle>> for FSM<DoorOpen> {
  */
 // DoorOpen->Moving
 impl From<FSM<DoorOpen>> for FSM<Moving> {
-    fn from(val: FSM<DoorOpen>, dirn: u8) -> FSM<Moving> {
+    fn from(val: FSM<DoorOpen>) -> FSM<Moving> {
+        //Figure out movement direction
+        let dirn = elevio::DIRN_DOWN;
         val.hw.motor_direction(dirn);
         FSM {
             hw: val.hw,
@@ -117,9 +121,28 @@ impl From<FSM<DoorOpen>> for FSM<Moving> {
     }
 }
 
+/*
 //DoorOpen->DoorOpen (obstruction signal OR currentfloor order button is pressed)
 impl From<FSM<DoorOpen>> for FSM<DoorOpen> {
-    fn from(val: FSM<DoorOpen>) -> FSM<DoorOpen> {/* Restart timer */}
+    fn from(val: FSM<DoorOpen>) -> FSM<DoorOpen> {
+        let new_timer: timer::Timer = timer::timer_start(DOOR_OPEN_TIME);
+        FSM {
+            hw: val.hw,
+            floor: val.floor,
+            behaviour: DoorOpen { new_timer },
+        }
+
+    /* Restart timer */}
+}
+*/
+impl FSM<DoorOpen> {
+    fn restart_timer(val: FSM<DoorOpen>) -> FSM<DoorOpen> {
+        FSM {
+            hw: val.hw,
+            floor: val.floor,
+            behaviour: DoorOpen{door_timer: timer::timer_start(DOOR_OPEN_TIME)}
+        }
+    }
 }
 
 // DoorOpen->Idle
@@ -148,7 +171,7 @@ impl From<FSM<Moving>> for FSM<Idle> {
         FSM {
             hw: val.hw,
             floor: val.floor,
-            behaviour: Idle,
+            behaviour: Idle{},
         }
     }
 }
@@ -159,11 +182,11 @@ impl From<FSM<Moving>> for FSM<DoorOpen> {
         /* Start timer, stop motor, open door */
         val.hw.motor_direction(e::DIRN_STOP);
         val.hw.door_light(true);
-        timer: timer::timer_start();
+        let door_open_timer: timer::Timer = timer::timer_start(3);
         FSM {
             hw: val.hw,
             floor: val.floor,
-            behaviour: DoorOpen { timer }
+            behaviour: DoorOpen { door_timer: door_open_timer }
         }
     }
 }

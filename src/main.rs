@@ -207,8 +207,13 @@ fn main() -> std::io::Result<()> {
             recv(obstruction_rx) -> a => {
                 let obstr = a.unwrap();
                 /* Logic for restarting the timer */
+                if elestator.ElevatorBehaviour == DoorOpen {
+                    elestator = FSM<DoorOpen>::restart_timer();
+                }
+                /*
                 println!("Obstruction: {:#?}", obstr);
                 elevator.motor_direction(if obstr { e::DIRN_STOP } else { dirn });
+                */
             },
     	}
     }
