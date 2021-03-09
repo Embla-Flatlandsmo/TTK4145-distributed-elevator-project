@@ -19,10 +19,16 @@ mod elevio {
 }
 
 mod fsm {
-    pub mod fsm;
+    pub mod elevatorfsm;
+}
+
+mod timer{
+    pub mod timer;
 }
 
 use elevio::elev as e;
+
+use fsm::elevatorfsm::Event as Event;
 
 // Data types to be sent on the network must derive traits for serialization
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -35,7 +41,6 @@ struct CustomDataType {
 fn main() -> std::io::Result<()> {
     /* ------------------NETWORK----------------- */
     // Genreate id: either from command line, or a default rust@ip#pid
-    println!("{:?}", DIRN::DIRN_UP.toString())
     let args: Vec<String> = env::args().collect();
     let id = if args.len() > 1 {
         args[1].clone()
@@ -111,8 +116,7 @@ fn main() -> std::io::Result<()> {
     /* We should do something about all these fsms :^) 
     * Here, we initialize the fsm and transitions it into downwards moving (is there a better way to solve this?)
     */
-    let mut elestator: fsm::fsm::FSM = fsm::fsm::FSM::new(elestator);
-    elestator = fsm::fsm::FSM::<Moving>::from(elestator);
+    let mut elestator: fsm::elevatorfsm::Elevator = fsm::elevatorfsm::Elevator::new(elevator.clone());
     
     let poll_period = time::Duration::from_millis(25);
     
@@ -182,18 +186,21 @@ fn main() -> std::io::Result<()> {
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
                 println!("Floor: {:#?}", floor);
-                elestator = FSM::<Moving>::from(elestator); //update fsm if we detect new floor sensor
-                /*
-                dirn = 
+                elestator = elestator.clone().set_floor(floor);
+                println!("Elestator floor: {:#?}", elestator.clone().get_floor());
+                //shouldstop?
+                
                     if floor == 0 {
-                        e::DIRN_UP
+                        elestator = elestator.clone().transition(Event::ShouldMoveUp);
+                        //e::DIRN_UP
                     } else if floor == elev_num_floors-1 {
-                        e::DIRN_DOWN
+                        elestator = elestator.clone().transition(Event::ShouldMoveDown);
+                        //e::DIRN_DOWN
                     } else {
-                        dirn
+                        //dirn
                     };
-                elevator.motor_direction(dirn);
-                */
+                //elevator.motor_direction(dirn);
+                
             },
             recv(stop_button_rx) -> a => {
                 let stop = a.unwrap();
@@ -207,9 +214,6 @@ fn main() -> std::io::Result<()> {
             recv(obstruction_rx) -> a => {
                 let obstr = a.unwrap();
                 /* Logic for restarting the timer */
-                if elestator.ElevatorBehaviour == DoorOpen {
-                    elestator = FSM<DoorOpen>::restart_timer();
-                }
                 /*
                 println!("Obstruction: {:#?}", obstr);
                 elevator.motor_direction(if obstr { e::DIRN_STOP } else { dirn });

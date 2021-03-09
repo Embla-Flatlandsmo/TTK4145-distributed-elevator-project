@@ -1,10 +1,10 @@
 
-use super::std::time::Duration;
-use super::std::time::Instant;
+use std::time::Duration;
+use std::time::Instant;
 use std::thread;
 use crossbeam_channel as cbc;
 
-
+/*
 /**
  * Here: Maybe we need to introduce some way to spawn a thread in timer_start?
  * */
@@ -42,3 +42,4 @@ pub fn timer_start(timer_duration: u64) -> Timer {
 }
 
 //fn timer_isTimeout(timer: Timer) {/* Send message on the channel */}
+*/
