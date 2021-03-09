@@ -48,6 +48,7 @@ impl Elevator {
 
     pub fn transition(self, event: Event) -> Elevator {
         let from_state = self.clone().state;
+        println!("Entered transition");
         match (from_state, event) {
             (State::Idle, Event::ShouldOpenDoor) => on_should_open_door(self),
             (State::Idle, Event::ShouldMoveDown) => on_should_move(self, elevio::DIRN_DOWN),

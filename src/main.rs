@@ -185,16 +185,17 @@ fn main() -> std::io::Result<()> {
             },
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
-                println!("Floor: {:#?}", floor);
-                elestator = elestator.clone().set_floor(floor);
+                //println!("Floor: {:#?}", floor);
+                elestator = elestator.clone().set_floor(floor.clone());
                 println!("Elestator floor: {:#?}", elestator.clone().get_floor());
-                //shouldstop?
-                
+                println!("Floor: {:#?}", floor);
                     if floor == 0 {
-                        elestator = elestator.clone().transition(Event::ShouldMoveUp);
+                        elestator = elestator.transition(Event::ArriveAtDestination);
+                        elestator = elestator.transition(Event::ShouldMoveUp);
                         //e::DIRN_UP
                     } else if floor == elev_num_floors-1 {
-                        elestator = elestator.clone().transition(Event::ShouldMoveDown);
+                        elestator = elestator.transition(Event::ArriveAtDestination);
+                        elestator = elestator.transition(Event::ShouldMoveDown);
                         //e::DIRN_DOWN
                     } else {
                         //dirn
