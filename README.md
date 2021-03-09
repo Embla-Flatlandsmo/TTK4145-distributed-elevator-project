@@ -2,6 +2,20 @@ Elevator Project
 ================
 
 
+
+
+Module diagram (Work in progress)
+-----
+![Module diagram](./modules.png)
+
+FSM (What's been implemented so far)
+----
+![FSM](./fsm.png)
+
+
+Provided text below
+========
+
 Summary
 -------
 Create software for controlling `n` elevators working in parallel across `m` floors.
