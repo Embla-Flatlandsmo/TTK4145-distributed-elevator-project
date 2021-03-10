@@ -18,6 +18,11 @@ mod elevio {
     pub mod poll;
 }
 
+mod order_manager {
+    pub mod local_order_manager;
+    pub mod order_list;
+}
+
 mod fsm {
     pub mod elevatorfsm;
 }
@@ -49,7 +54,7 @@ fn main() -> std::io::Result<()> {
         format!("rust@{}#{}", local_ip, process::id())
     };
 
-    
+
     let msg_port = 19735;
     let peer_port = 19738;
 
@@ -112,6 +117,7 @@ fn main() -> std::io::Result<()> {
     let elevator = e::ElevatorHW::init("localhost:15657", elev_num_floors)?;
     println!("Elevator started:\n{:#?}", elevator);    
 
+    let local_orders = order_manager::order_list::OrderList::new(elev_num_floors);
 
     /* We should do something about all these fsms :^) 
     * Here, we initialize the fsm and transitions it into downwards moving (is there a better way to solve this?)
@@ -181,6 +187,7 @@ fn main() -> std::io::Result<()> {
                 /* Logic for starting to move elevator THROUGH the fsm (right now at least) */
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);
+                local_orders.add_order(button: elevio::CallButton)
                 elevator.call_button_light(call_button.floor, call_button.call, true);
             },
             recv(floor_sensor_rx) -> a => {
