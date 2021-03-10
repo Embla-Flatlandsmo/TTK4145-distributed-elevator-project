@@ -1,9 +1,18 @@
+//! Fast and easy order management to be used for both local and global queues!
+
 use crate::elevio::poll as elevio;
 use std::vec::Vec;
 
-//! Fast and easy order management to be used for both local and global queues!
 
 /// Utility struct for managing local or global orders
+/// 
+/// # Example
+/// ```rust
+/// let num_floors = 4;
+/// let global_orders = OrderList::new(num_floors);
+/// let call_button_corresponding_to_order = CallButton{floor: 2, call: 1}
+/// global_orders.add_order(call_button_corresponding_to_order)
+/// ```
 pub struct OrderList {
     n_floors: usize,
     up_queue: Vec<bool>,
