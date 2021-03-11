@@ -15,8 +15,8 @@ use std::vec::Vec;
 /// ```
 pub struct OrderList {
     n_floors: usize,
-    up_queue: Vec<bool>,
-    down_queue: Vec<bool>
+    pub up_queue: Vec<bool>,
+    pub down_queue: Vec<bool>
 }
 
 impl OrderList {
