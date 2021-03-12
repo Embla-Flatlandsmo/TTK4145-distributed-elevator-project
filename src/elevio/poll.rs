@@ -4,7 +4,7 @@ use crossbeam_channel as cbc;
 
 use super::elev;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct CallButton {
     pub floor:  u8,
     pub call:   u8,

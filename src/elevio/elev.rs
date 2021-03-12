@@ -23,6 +23,14 @@ pub const DIRN_DOWN:    u8 = u8::MAX;
 pub const DIRN_STOP:    u8 = 0;
 pub const DIRN_UP:      u8 = 1;
 
+#[derive(PartialEq, Debug)]
+pub enum HardwareCommand{
+    DoorLight{on: bool},
+    MotorDirection{dirn: u8},
+    CallButtonLight{floor: u8, call: u8, on: bool},
+    StopLight{on: bool},
+    FloorLight{floor: u8}
+}
 
 impl ElevatorHW {
 
@@ -101,8 +109,18 @@ impl ElevatorHW {
         sock.read(&mut buf).unwrap();
         return buf[1] != 0;
     }
-}
 
+    /// Helper function so elev can interact with the hardwarecommand struct
+    pub fn execute_command(&self, command: HardwareCommand) {
+        match command {
+            HardwareCommand::CallButtonLight{floor, call, on} => self.call_button_light(floor, call, on),
+            HardwareCommand::DoorLight{on} => self.door_light(on),
+            HardwareCommand::FloorLight{floor} => self.floor_indicator(floor),
+            HardwareCommand::MotorDirection{dirn} => self.motor_direction(dirn),
+            HardwareCommand::StopLight{on} => self.stop_button_light(on)
+        }
+    }
+}
 
 impl fmt::Display for ElevatorHW {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -110,9 +128,6 @@ impl fmt::Display for ElevatorHW {
         write!(f, "Elevator@{}({})", addr, self.num_floors)
     }
 }
-
-
-
 
 
 

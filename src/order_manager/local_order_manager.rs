@@ -81,34 +81,36 @@ fn queue_is_empty(queue: &Vec<bool>) -> bool {
     return true;
 }
 */
-fn order_chooseDirection(fsm: &mut elevatorfsm::Elevator, order_list: &mut order_list::OrderList) -> OrderDirection {
-    let dirn = (*fsm).clone().get_dirn();
-    let floor = usize::from((*fsm).clone().get_floor());
-    let orders_above: bool = order_above(order_list, floor);
-    let orders_below: bool = order_below(order_list, floor);
+pub fn order_chooseDirection(fsm: &mut elevatorfsm::Elevator) -> u8 {
+    let dirn = fsm.get_dirn();
+    let order_list = fsm.get_orders();
+    let floor = usize::from(fsm.get_floor());
+    let orders_above: bool = order_above(&order_list, floor);
+    let orders_below: bool = order_below(&order_list, floor);
     match dirn {
         DIRN_UP => {
-            if orders_above {return OrderDirection::Above;}
-            else if orders_below {return OrderDirection::Below;}
-            else {return OrderDirection::None;}
+            if orders_above {return DIRN_UP;}
+            else if orders_below {return DIRN_DOWN;}
+            else {return DIRN_STOP;}
         },
         DIRN_DOWN => {
-            if orders_below {return OrderDirection::Below;}
-            else if orders_above {return OrderDirection::Above;}
-            else {return OrderDirection::None;}
+            if orders_below {return DIRN_DOWN;}
+            else if orders_above {return DIRN_UP;}
+            else {return DIRN_STOP;}
         },
         DIRN_STOP => {
-            if orders_below {return OrderDirection::Below;}
-            else if orders_above {return OrderDirection::Above;}
-            else {return OrderDirection::None;}
+            if orders_below {return DIRN_DOWN;}
+            else if orders_above {return DIRN_UP;}
+            else {return DIRN_STOP;}
         },
-        _ => OrderDirection::None
+        _ => DIRN_STOP
     }
 }
 
-fn order_shouldStop(fsm: &mut elevatorfsm::Elevator, order_list: &mut order_list::OrderList) -> bool {
-    let dirn = (*fsm).clone().get_dirn();
-    let floor = usize::from((*fsm).clone().get_floor());
+pub fn order_shouldStop(fsm: &mut elevatorfsm::Elevator) -> bool {
+    let dirn = fsm.get_dirn();
+    let order_list = fsm.get_orders();
+    let floor = usize::from(fsm.get_floor());
     match dirn {
         DIRN_DOWN => {
             return {
@@ -200,17 +202,4 @@ mod test {
         order_list.add_order(CallButton{floor: 0, call: 1});
         assert!(!order_above(&order_list, 3));
     }
-    #[test]
-    fn it_chooses_right_direction() {
-        /* to-do
-        let elev_num_floors = 4;
-        let elevator = e::ElevatorHW::init("localhost:15657", elev_num_floors)?;
-        */
-        
-        let mut order_list = order_list::OrderList::new(5);
-        order_list.add_order(CallButton{floor: 1, call: 0});
-        order_list.add_order(CallButton{floor: 0, call: 1});
-    }
-
-
 }

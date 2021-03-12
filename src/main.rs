@@ -120,7 +120,22 @@ fn main() -> std::io::Result<()> {
     /* We should do something about all these fsms :^) 
     * Here, we initialize the fsm and transitions it into downwards moving (is there a better way to solve this?)
     */
-    let mut elestator: fsm::elevatorfsm::Elevator = fsm::elevatorfsm::Elevator::new(elevator.clone());
+
+    let (hardware_command_tx, hardware_command_rx) = cbc::unbounded::<elevio::elev::HardwareCommand>();
+
+    let mut fsm = fsm::elevatorfsm::Elevator::new(elev_num_floors,hardware_command_tx);
+
+    /* Spawn a thread that executes elevator commands sent from fsm on server */
+    {
+        let elevator = elevator.clone();
+        spawn(move ||{
+            let r = hardware_command_rx.recv();
+            match r {
+                Ok(c) => elevator.execute_command(c),
+                Err(_e) => {}
+            }
+        });
+    }
     
     let poll_period = time::Duration::from_millis(25);
     
@@ -182,39 +197,37 @@ fn main() -> std::io::Result<()> {
 
         cbc::select! {
             recv(call_button_rx) -> a => {
-                /* Logic for starting to move elevator THROUGH the fsm (right now at least) */
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);
+                fsm = fsm.transition(Event::OnNewOrder{btn: call_button});
                 elevator.call_button_light(call_button.floor, call_button.call, true);
             },
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
-                //println!("Floor: {:#?}", floor);
-                elestator = elestator.clone().set_floor(floor.clone());
-                println!("Elestator floor: {:#?}", elestator.clone().get_floor());
+                fsm = fsm.transition(Event::OnFloorArrival{floor: floor});
+                println!("Floor: {:#?}", floor);
+                /*
                 println!("Floor: {:#?}", floor);
                     if floor == 0 {
-                        elestator = elestator.transition(Event::ArriveAtDestination);
-                        elestator = elestator.transition(Event::ShouldMoveUp);
                         //e::DIRN_UP
                     } else if floor == elev_num_floors-1 {
-                        elestator = elestator.transition(Event::ArriveAtDestination);
-                        elestator = elestator.transition(Event::ShouldMoveDown);
                         //e::DIRN_DOWN
                     } else {
                         //dirn
                     };
                 //elevator.motor_direction(dirn);
-                
+                */
             },
             recv(stop_button_rx) -> a => {
                 let stop = a.unwrap();
+                /*
                 println!("Stop button: {:#?}", stop);
                 for f in 0..elev_num_floors {
                     for c in 0..3 {
                         elevator.call_button_light(f, c, false);
                     }
                 }
+                */
             },
             recv(obstruction_rx) -> a => {
                 let obstr = a.unwrap();

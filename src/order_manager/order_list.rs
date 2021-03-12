@@ -14,7 +14,7 @@ use std::vec::Vec;
 /// global_orders.add_order(call_button_corresponding_to_order)
 /// ```
 /// 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Debug) ]
 pub struct OrderList {
     n_floors: usize,
     pub up_queue: Vec<bool>,
@@ -102,7 +102,7 @@ mod test {
         order_list.add_order(CallButton{floor: 1, call: 2});
         order_list.remove_order(CallButton{floor: 3, call: 0});
         order_list.remove_order(CallButton{floor: 1, call: 2});
-        let mut reference_order_list = OrderList::new(5);
+        let reference_order_list = OrderList::new(5);
         assert!((order_list == reference_order_list));
     }
 
@@ -113,7 +113,7 @@ mod test {
         order_list.add_order(CallButton{floor: 2, call: 1});
         order_list.add_order(CallButton{floor: 2, call: 2});
         order_list.clear_orders_on_floor(2);
-        let mut reference_order_list = OrderList::new(5);
+        let reference_order_list = OrderList::new(5);
         assert!((order_list == reference_order_list));
     }
 
@@ -124,7 +124,7 @@ mod test {
         order_list.add_order(CallButton{floor: 2, call: 0});
         order_list.add_order(CallButton{floor: 3, call: 2});
         order_list.clear_all_orders();
-        let mut reference_order_list = OrderList::new(5);
+        let reference_order_list = OrderList::new(5);
         assert!((order_list == reference_order_list));
     }
 }
