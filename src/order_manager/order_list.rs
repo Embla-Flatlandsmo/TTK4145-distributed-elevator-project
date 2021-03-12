@@ -16,7 +16,8 @@ use std::vec::Vec;
 pub struct OrderList {
     n_floors: usize,
     pub up_queue: Vec<bool>,
-    pub down_queue: Vec<bool>
+    pub down_queue: Vec<bool>,
+    pub inside_queue: Vec <bool>,
 }
 
 impl OrderList {
@@ -28,7 +29,8 @@ impl OrderList {
         OrderList{
             n_floors: temp_n_floors,
             up_queue: vec![false; temp_n_floors],
-            down_queue: vec![false; temp_n_floors]
+            down_queue: vec![false; temp_n_floors],
+            inside_queue: vec![false; temp_n_floors]
         }
     }
 
@@ -37,6 +39,7 @@ impl OrderList {
     /// `floor` - Floor to clear
     pub fn clear_orders_on_floor(&mut self, floor: u8) {
         self.up_queue[usize::from(floor)] = false;
+        self.inside_queue[usize::from(floor)] = false;
         self.down_queue[usize::from(floor)] = false;
     }
     /// Clears all orders on all the floors
@@ -44,6 +47,7 @@ impl OrderList {
         for i in 0..=self.n_floors {
             self.up_queue[i] = false;
             self.down_queue[i] = false;
+            self.inside_queue[i] = false;
         }
     }
     /// Removes a single order in the specified direction
@@ -68,8 +72,7 @@ impl OrderList {
         match button.call {
             0 => self.up_queue[usize::from(button.floor)] = add_or_remove,
             1 => self.down_queue[usize::from(button.floor)] = add_or_remove,
-            2 => {self.up_queue[usize::from(button.floor)] = add_or_remove;
-                self.down_queue[usize::from(button.floor)] = add_or_remove},
+            2 => self.inside_queue[usize::from(button.floor)] = add_or_remove,
             _ => {}
         }
     }

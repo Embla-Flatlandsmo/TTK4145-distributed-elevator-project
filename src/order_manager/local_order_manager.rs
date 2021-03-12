@@ -27,7 +27,7 @@ pub fn at_ordered_floor(fsm: &elevatorfsm::Elevator, order_list: &order_list::Or
     switch
 }
 
-*/
+
 
 pub fn order_above_or_below(fsm: &elevatorfsm::Elevator, order_list: &order_list::OrderList) -> OrderDirection {
     let up_queue = (*order_list).up_queue.clone();
@@ -80,61 +80,126 @@ fn queue_is_empty(queue: &Vec<bool>) -> bool {
     }
     return true;
 }
-
-fn queue_is_empty_below(queue: &Vec<bool>, floor: usize) -> bool {
-    for order in queue.iter().take(floor+1) {
-        if *order {
-            return false;
-        }
+*/
+fn order_chooseDirection(fsm: &elevatorfsm::Elevator, order_list: &order_list::OrderList) -> OrderDirection {
+    let dirn = (*fsm).get_dirn();
+    let floor = usize::from((*fsm).get_floor());
+    let orders_above: bool = order_above(order_list, floor);
+    let orders_below: bool = order_below(order_list, floor);
+    match dirn {
+        DIRN_UP => {
+            if orders_above {return OrderDirection::Above;}
+            else if orders_below {return OrderDirection::Below;}
+            else {return OrderDirection::None;}
+        },
+        DIRN_DOWN => {
+            if orders_below {return OrderDirection::Below;}
+            else if orders_above {return OrderDirection::Above;}
+            else {return OrderDirection::None;}
+        },
+        DIRN_STOP => {
+            if orders_below {return OrderDirection::Below;}
+            else if orders_above {return OrderDirection::Above;}
+            else {return OrderDirection::None;}
+        },
+        _ => OrderDirection::None
     }
-    return true;
 }
 
-fn queue_is_empty_above(queue: &Vec<bool>, floor: usize) -> bool {
-    for order in queue.iter().rev().take(queue.len()-floor) {
+fn order_shouldStop(fsm: &elevatorfsm::Elevator, order_list: &order_list::OrderList) -> bool {
+    let dirn = fsm.clone().get_dirn();
+    let floor = usize::from(fsm.clone().get_floor());
+    match dirn {
+        DIRN_DOWN => {
+            return {
+                order_list.down_queue[floor] || 
+                order_list.inside_queue[floor] ||
+                !order_below(order_list.clone(),floor)
+            }
+        },
+        DIRN_UP => {
+            return {
+                order_list.up_queue[floor] ||
+                order_list.inside_queue[floor] ||
+                !order_above(order_list.clone(),floor)
+            }
+        },
+        _ => {true}
+    }
+}
+
+
+fn order_below(order_list: &order_list::OrderList, floor: usize) -> bool {
+    let up_queue = &order_list.up_queue;
+    let down_queue = &order_list.down_queue;
+    let inside_queue = &order_list.inside_queue;
+
+    return single_queue_order_below(&up_queue, floor) 
+    || single_queue_order_below(&down_queue, floor) || single_queue_order_below(&inside_queue, floor);
+}
+
+
+fn order_above(order_list: &order_list::OrderList, floor: usize) -> bool {
+    let up_queue = &order_list.up_queue;
+    let down_queue = &order_list.down_queue;
+    let inside_queue = &order_list.inside_queue;
+
+    return single_queue_order_above(&up_queue, floor) 
+    || single_queue_order_above(&down_queue, floor) || single_queue_order_above(&inside_queue, floor);
+}
+
+fn single_queue_order_below(queue: &Vec<bool>, floor: usize) -> bool {
+    for order in queue.iter().take(floor+1) {
         if *order {
-            return false;
+            return true;
         }
     }
-    return true;
+    return false;
+}
+
+fn single_queue_order_above(queue: &Vec<bool>, floor: usize) -> bool {
+    for order in queue.iter().rev().take(queue.len()-floor) {
+        if *order {
+            return true;
+        }
+    }
+    return false;
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::*; 
+    use crate::elevio::poll::CallButton;
     #[test]
-    fn it_finds_empty() {
-        let queue: Vec<bool> = [false, false, false, false, false].to_vec();
-        assert!(queue_is_empty(&queue));
+    fn it_finds_order_above() {
+        let mut order_list = order_list::OrderList::new(5);
+        order_list.add_order(CallButton{call: 0, floor: 3});
+        order_list.add_order(CallButton{call: 2, floor: 1});
+        assert!(order_above(&order_list, 1));
     }
     #[test]
-    fn it_finds_non_empty() {
-        let queue: Vec<bool> = [true, false, true, true].to_vec();
-        assert!(!queue_is_empty(&queue))
-    }
-
-    #[test]
-    fn it_finds_empty_above() {
-        let queue: Vec<bool> = [false, true, false, false, false].to_vec();
-        assert!(queue_is_empty_above(&queue, 2));
-    }
-
-    #[test]
-    fn it_finds_empty_below() {
-        let queue: Vec<bool> = [false, false, true, false, false].to_vec();
-        assert!(queue_is_empty_below(&queue, 2));
+    fn it_finds_order_below() {
+        let mut order_list = order_list::OrderList::new(5);
+        order_list.add_order(CallButton{call: 0, floor: 3});
+        order_list.add_order(CallButton{call: 2, floor: 1});
+        assert!(order_below(&order_list, 1));
     }
 
     #[test]
-    fn it_finds_non_empty_above() {
-        let queue: Vec<bool> = [true, false, false, false, true].to_vec();
-        assert!(!queue_is_empty_above(&queue, 3));
+    fn it_finds_no_order_below() {
+        let mut order_list = order_list::OrderList::new(5);
+        order_list.add_order(CallButton{call: 0, floor: 3});
+        order_list.add_order(CallButton{call: 2, floor: 4});
+        assert!(order_below(&order_list, 1));
     }
 
     #[test]
-    fn it_finds_non_empty_below() {
-        let queue: Vec<bool> = [true, false, false, false, false].to_vec();
-        assert!(!queue_is_empty_below(&queue, 3));
+    fn it_finds_no_order_above() {
+        let mut order_list = order_list::OrderList::new(5);
+        order_list.add_order(CallButton{call: 0, floor: 1});
+        order_list.add_order(CallButton{call: 1, floor: 0});
+        assert!(order_above(&order_list, 2));
     }
+
 
 }
