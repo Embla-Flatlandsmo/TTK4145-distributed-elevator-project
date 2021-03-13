@@ -129,10 +129,12 @@ fn main() -> std::io::Result<()> {
     {
         let elevator = elevator.clone();
         spawn(move ||{
-            let r = hardware_command_rx.recv();
-            match r {
-                Ok(c) => elevator.execute_command(c),
-                Err(_e) => {}
+            loop {
+                let r = hardware_command_rx.recv();
+                match r {
+                    Ok(c) => elevator.execute_command(c),
+                    Err(_e) => {}
+                }
             }
         });
     }
