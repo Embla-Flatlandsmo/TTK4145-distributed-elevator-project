@@ -4,6 +4,8 @@ use crate::elevio::poll;
 use crate::order_manager::local_order_manager;
 use crate::order_manager::order_list;
 use std::time::Duration;
+use crate::fsm::door_timer;
+
 use crossbeam_channel as cbc;
 extern crate timer;
 
@@ -16,6 +18,7 @@ extern crate timer;
 #[derive(Clone, Debug)]
 pub struct Elevator {
     hw_tx: crossbeam_channel::Sender<elevio::HardwareCommand>,
+    timer_start_tx: cbc::Sender<()>,
     state: State,
     dirn: u8,
     floor: u8,
@@ -40,10 +43,10 @@ pub enum Event {
     OnObstructionSignal,
 }
 
-pub const DOOR_OPEN_TIME: u8 = 3;
+pub const DOOR_OPEN_TIME: u64 = 3;
 
 impl Elevator {
-    pub fn new(n_floors: u8, hw_commander: cbc::Sender<elevio::HardwareCommand>, timer_tx: cbc::Sender<>) -> Elevator {
+    pub fn new(n_floors: u8, hw_commander: cbc::Sender<elevio::HardwareCommand>, timer_start_tx: cbc::Sender<()>) -> Elevator {
         hw_commander
             .send(elevio::HardwareCommand::MotorDirection {
                 dirn: elevio::DIRN_DOWN,
@@ -51,6 +54,7 @@ impl Elevator {
             .unwrap();
         return Elevator {
             hw_tx: hw_commander,
+            timer_start_tx: timer_start_tx,
             state: State::Initializing,
             dirn: elevio::DIRN_DOWN,
             floor: u8::MAX,
@@ -58,7 +62,7 @@ impl Elevator {
         };
     }
     /// Takes the elevator fsm from one state to the next and sends the appropriate hardware commands on the hardware channel
-    pub fn transition(self, event: Event) -> Elevator {
+    pub fn on_event(mut self, event: Event) {
         let from_state = self.get_state();
         match (from_state, event) {
             /* Todo: Find out how to make this a bit more concise. The functions themselves have some redundancies here... */
@@ -69,18 +73,12 @@ impl Elevator {
             (State::DoorOpen, Event::OnObstructionSignal) => on_obstruction_signal(self),
             (State::Moving, Event::OnFloorArrival { floor }) => on_floor_arrival(self, floor),
             (State::Initializing, Event::OnFloorArrival { floor }) => on_floor_arrival(self, floor),
-            (State::Initializing, Event::OnNewOrder { btn }) => self,
-            (s, e) => Elevator {
-                hw_tx: self.hw_tx,
-                state: State::Failure(
-                    format!("Wrong state, event combination: {:#?} {:#?}", s, e).to_string(),
-                ),
-                dirn: self.dirn,
-                floor: self.floor,
-                orders: self.orders,
-            },
+            (State::Initializing, Event::OnNewOrder { btn }) => {},
+            (s, e) => self.state = State::Failure(
+                format!("Wrong state, event combination: {:#?} {:#?}", s, e).to_string(),
+            )
+            }
         }
-    }
 
     pub fn get_floor(&self) -> u8 {
         return self.floor;
@@ -105,7 +103,7 @@ pub fn clear_all_order_lights(elevhw: elevio::ElevatorHW, floor: u8) {
     }
 }
 
-fn on_door_time_out(mut elev: Elevator) -> Elevator {
+fn on_door_time_out(mut elev: Elevator) {
     let state = elev.get_state();
     let hw_tx = elev.get_hw_tx_handle();
     match state {
@@ -118,40 +116,32 @@ fn on_door_time_out(mut elev: Elevator) -> Elevator {
             hw_tx
                 .send(elevio::HardwareCommand::MotorDirection { dirn: new_dirn })
                 .unwrap();
-
             if new_dirn == elevio::DIRN_STOP {
-                return Elevator {
-                    hw_tx: elev.hw_tx,
-                    floor: elev.floor,
-                    dirn: elev.dirn,
-                    orders: elev.orders,
-                    state: State::Idle,
-                };
+                elev.state = State::Idle;
             } else {
-                return Elevator {
-                    hw_tx: elev.hw_tx,
-                    floor: elev.floor,
-                    dirn: elev.dirn,
-                    orders: elev.orders,
-                    state: State::Moving,
-                };
+                elev.state = State::Moving;
             }
         }
-        _ => elev,
+        _ => {},
     }
 }
 
-fn on_new_order(mut elev: Elevator, btn: poll::CallButton) -> Elevator {
+fn on_new_order(mut elev: Elevator, btn: poll::CallButton) {
     let state = elev.get_state();
     
     match state {
         State::DoorOpen => {
             if elev.get_floor() == btn.floor {
-                //restart timer
-                return elev;
+                //start timer
             } else {
                 elev.orders.add_order(btn);
-                return elev;
+                elev.hw_tx
+                .send(elevio::HardwareCommand::CallButtonLight {
+                    floor: btn.floor,
+                    call: btn.call,
+                    on: true,
+                })
+                .unwrap();
             }
         }
         State::Moving => {
@@ -163,7 +153,6 @@ fn on_new_order(mut elev: Elevator, btn: poll::CallButton) -> Elevator {
                     on: true,
                 })
                 .unwrap();
-            return elev;
         }
         State::Idle => {
             if elev.get_floor() == btn.floor {
@@ -171,33 +160,22 @@ fn on_new_order(mut elev: Elevator, btn: poll::CallButton) -> Elevator {
                     .send(elevio::HardwareCommand::DoorLight { on: true })
                     .unwrap();
                 //timer start
-                return Elevator {
-                    hw_tx: elev.hw_tx,
-                    floor: elev.floor,
-                    dirn: elev.dirn,
-                    state: State::DoorOpen,
-                    orders: elev.orders,
-                };
+                elev.state = State::DoorOpen;
             } else {
                 elev.orders.add_order(btn);
                 let new_dirn: u8 = local_order_manager::order_chooseDirection(&mut elev);
                 elev.hw_tx
                     .send(elevio::HardwareCommand::MotorDirection { dirn: new_dirn })
                     .unwrap();
-                return Elevator {
-                    hw_tx: elev.hw_tx,
-                    floor: elev.floor,
-                    dirn: new_dirn,
-                    state: State::Moving,
-                    orders: elev.orders,
-                };
+                elev.state = State::Moving;
+                elev.dirn = new_dirn;
             }
         }
-        _ => elev,
+        _ => {},
     }
 }
 
-fn on_floor_arrival(mut elev: Elevator, new_floor: u8) -> Elevator {
+fn on_floor_arrival(mut elev: Elevator, new_floor: u8) {
     let state = elev.get_state();
     elev.floor = new_floor;
     //let hw_tx = elev.get_hw_tx_handle();
@@ -216,12 +194,11 @@ fn on_floor_arrival(mut elev: Elevator, new_floor: u8) -> Elevator {
                     .send(elevio::HardwareCommand::DoorLight { on: true })
                     .unwrap();
                 //Start timer
+                elev.timer_start_tx.send(()).unwrap();
                 elev.orders.clear_orders_on_floor(new_floor);
                 elev.state = State::DoorOpen;
-                return elev;
             } else {
                 elev.floor = new_floor;
-                return elev;
             }
         }
         State::Initializing => {
@@ -231,10 +208,13 @@ fn on_floor_arrival(mut elev: Elevator, new_floor: u8) -> Elevator {
                 })
                 .unwrap();
                 elev.state = State::Idle;
-                return elev;
         }
-        _ => elev,
+        _ => {},
     }
+}
+
+fn on_obstruction_signal(mut elev: Elevator){
+    elev.timer_start_tx.send(()).unwrap();
 }
 
 fn notifyPeerInfo() { /* Some logic for sending a message that PeerInfo uses to update its info on the local elevator? */
@@ -252,9 +232,10 @@ mod test {
         num_floors: u8,
         arriving_floor: u8,
         hardware_command_tx: cbc::Sender<elevio::HardwareCommand>,
+        door_timer_start_tx: cbc::Sender<()>
     ) -> Elevator {
-        let mut elevator = Elevator::new(num_floors, hardware_command_tx);
-        elevator = elevator.transition(Event::OnFloorArrival {
+        let mut elevator = Elevator::new(num_floors, hardware_command_tx, door_timer_start_tx);
+        elevator.on_event(Event::OnFloorArrival {
             floor: arriving_floor,
         });
         return elevator;
@@ -262,10 +243,11 @@ mod test {
     #[test]
     fn it_initializes_correctly() {
         let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
+        let (timer_tx, timer_rx) = cbc::unbounded::<()>();
         let elev_num_floors = 5;
 
-        let mut elevator = Elevator::new(5, hw_tx);
-        elevator = elevator.transition(Event::OnFloorArrival { floor: 2 });
+        let mut elevator = Elevator::new(5, hw_tx, timer_tx);
+        elevator.on_event(Event::OnFloorArrival { floor: 2 });
         let elevator_state = elevator.get_state();
         assert!((elevator.get_floor() == 2) && (elevator_state == State::Idle));
     }
@@ -273,11 +255,12 @@ mod test {
     #[test]
     fn it_opens_the_door_when_order_on_current_floor() {
         let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let mut elevator = initialize_elevator(5, 3, hw_tx);
+        let (timer_tx, timer_rx) = cbc::unbounded::<()>();
+        let mut elevator = initialize_elevator(5, 3, hw_tx, timer_tx);
         while !hw_rx.is_empty() {
             hw_rx.recv().unwrap();
         }
-        elevator = elevator.transition(Event::OnNewOrder {
+        elevator.on_event(Event::OnNewOrder {
             btn: poll::CallButton { floor: 3, call: 2 },
         });
         assert_eq!(
@@ -289,11 +272,12 @@ mod test {
     #[test]
     fn it_goes_up_when_order_is_above() {
         let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let mut elevator = initialize_elevator(5, 2, hw_tx);
+        let (timer_tx, timer_rx) = cbc::unbounded::<()>();
+        let mut elevator = initialize_elevator(5, 2, hw_tx, timer_tx);
         while !hw_rx.is_empty() {
             hw_rx.recv().unwrap();
         }
-        elevator = elevator.transition(Event::OnNewOrder {
+        elevator.on_event(Event::OnNewOrder {
             btn: poll::CallButton { floor: 4, call: 1 },
         });
         assert_eq!(
@@ -307,11 +291,12 @@ mod test {
     #[test]
     fn it_goes_down_when_order_is_below() {
         let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let mut elevator = initialize_elevator(5, 2, hw_tx);
+        let (timer_tx, timer_rx) = cbc::unbounded::<()>();
+        let mut elevator = initialize_elevator(5, 2, hw_tx, timer_tx);
         while !hw_rx.is_empty() {
             hw_rx.recv().unwrap();
         }
-        elevator = elevator.transition(Event::OnNewOrder {
+        elevator.on_event(Event::OnNewOrder {
             btn: poll::CallButton { floor: 0, call: 1 },
         });
         assert_eq!(
@@ -325,50 +310,53 @@ mod test {
     #[test]
     fn it_opens_door_at_ordered_floor() {
         let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let mut elevator = initialize_elevator(5, 2, hw_tx);
+        let (timer_tx, timer_rx) = cbc::unbounded::<()>();
+        let mut elevator = initialize_elevator(5, 2, hw_tx, timer_tx);
         while !hw_rx.is_empty() {
             hw_rx.recv().unwrap();
         }
-        elevator = elevator.transition(Event::OnNewOrder {
+        elevator.on_event(Event::OnNewOrder {
             btn: poll::CallButton { floor: 0, call: 1 },
         });
-        elevator = elevator.transition(Event::OnFloorArrival{floor: 1});
-        elevator = elevator.transition(Event::OnFloorArrival{floor: 0});
+        elevator.on_event(Event::OnFloorArrival{floor: 1});
+        elevator.on_event(Event::OnFloorArrival{floor: 0});
         assert_eq!(elevator.get_state(), State::DoorOpen);
     }
 
     #[test]
     fn it_goes_to_idle_when_no_orders_found() {
         let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let mut elevator = initialize_elevator(5, 2, hw_tx);
+        let (timer_tx, timer_rx) = cbc::unbounded::<()>();
+        let mut elevator = initialize_elevator(5, 2, hw_tx, timer_tx);
         while !hw_rx.is_empty() {
             hw_rx.recv().unwrap();
         }
-        elevator = elevator.transition(Event::OnNewOrder {
+        elevator.on_event(Event::OnNewOrder {
             btn: poll::CallButton { floor: 0, call: 1 },
         });
-        elevator = elevator.transition(Event::OnFloorArrival{floor: 1});
-        elevator = elevator.transition(Event::OnFloorArrival{floor: 0});
-        elevator = elevator.transition(Event::OnDoorTimeOut);
+        elevator.on_event(Event::OnFloorArrival{floor: 1});
+        elevator.on_event(Event::OnFloorArrival{floor: 0});
+        elevator.on_event(Event::OnDoorTimeOut);
         assert_eq!(elevator.get_state(), State::Idle);
     }
 
     #[test]
     fn it_services_next_order_after_door_closed() {
         let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let mut elevator = initialize_elevator(5, 2, hw_tx);
+        let (timer_tx, timer_rx) = cbc::unbounded::<()>();
+        let mut elevator = initialize_elevator(5, 2, hw_tx, timer_tx);
         while !hw_rx.is_empty() {
             hw_rx.recv().unwrap();
         }
-        elevator = elevator.transition(Event::OnNewOrder {
+        elevator.on_event(Event::OnNewOrder {
             btn: poll::CallButton { floor: 0, call: 1 },
         });
-        elevator = elevator.transition(Event::OnNewOrder {
+        elevator.on_event(Event::OnNewOrder {
             btn: poll::CallButton { floor: 4, call: 2 },
         });
-        elevator = elevator.transition(Event::OnFloorArrival{floor: 1});
-        elevator = elevator.transition(Event::OnFloorArrival{floor: 0});
-        elevator = elevator.transition(Event::OnDoorTimeOut);
+        elevator.on_event(Event::OnFloorArrival{floor: 1});
+        elevator.on_event(Event::OnFloorArrival{floor: 0});
+        elevator.on_event(Event::OnDoorTimeOut);
         assert_eq!(elevator.get_state(), State::Moving);
     }
     

@@ -7,7 +7,6 @@ use std::net;
 use crossbeam_channel as cbc;
 use serde;
 
-
 mod network {
     pub mod peers;
     pub mod bcast;
@@ -25,9 +24,11 @@ mod order_manager {
 
 mod fsm {
     pub mod elevatorfsm;
+    pub mod door_timer;
 }
 
 use elevio::elev as e;
+use fsm::door_timer;
 
 use fsm::elevatorfsm::Event as Event;
 
@@ -38,6 +39,8 @@ struct CustomDataType {
     iteration: u64,
 }
 
+
+pub const DOOR_OPEN_TIME: u64 = 3;
 
 fn main() -> std::io::Result<()> {
     /* ------------------NETWORK----------------- */
@@ -118,8 +121,24 @@ fn main() -> std::io::Result<()> {
     */
 
     let (hardware_command_tx, hardware_command_rx) = cbc::unbounded::<elevio::elev::HardwareCommand>();
+    let (door_timer_start_tx, door_timer_start_rx) = cbc::unbounded::<()>();
+    let (door_timeout_tx, door_timeout_rx) = cbc::unbounded::<()>();
+    // Initialize the door timer
+    spawn(move || {
+        let door_timer: door_timer::Timer = door_timer::Timer::new(DOOR_OPEN_TIME);
+        loop {
+            let r = door_timer_start_rx.try_recv();
+            match r {
+                Ok(r) => door_timer.start(),
+                _ => {}
+            }
+            if door_timer.did_expire() {
+                door_timeout_tx.send(()).unwrap();
+            }
+        }
+    });
 
-    let mut fsm = fsm::elevatorfsm::Elevator::new(elev_num_floors,hardware_command_tx);
+    let mut fsm = fsm::elevatorfsm::Elevator::new(elev_num_floors,hardware_command_tx, door_timer_start_tx);
 
     /* Spawn a thread that executes elevator commands sent from fsm on server */
     {
@@ -169,16 +188,6 @@ fn main() -> std::io::Result<()> {
         });
     }
     
-    let (door_timer_tx, door_timer_rx) = cbc::unbounded::<bool>();
-    {
-        /* Some logic for spawning timer thread
-        
-        Perhaps this could be made in the timer module?
-        
-        In any case, it needs to send a message so it can be spotted in the select loop */
-
-    }
-    
     
     // main body: receive peer updates and data from the network
     loop {
@@ -194,12 +203,12 @@ fn main() -> std::io::Result<()> {
             recv(call_button_rx) -> a => {
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);
-                fsm = fsm.transition(Event::OnNewOrder{btn: call_button});
+                fsm.on_event(Event::OnNewOrder{btn: call_button});
                 elevator.call_button_light(call_button.floor, call_button.call, true);
             },
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
-                fsm = fsm.transition(Event::OnFloorArrival{floor: floor});
+                fsm.on_event(Event::OnFloorArrival{floor: floor});
                 println!("Floor: {:#?}", floor);
 
             },
@@ -215,6 +224,10 @@ fn main() -> std::io::Result<()> {
                 elevator.motor_direction(if obstr { e::DIRN_STOP } else { dirn });
                 */
             },
+            recv(door_timeout_rx) -> a => {
+                a.unwrap();
+                fsm.on_event(Event::OnDoorTimeOut);
+            }
     	}
     }
 
