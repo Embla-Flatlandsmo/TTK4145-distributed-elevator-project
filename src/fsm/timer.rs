@@ -3,6 +3,47 @@ use std::time::Duration;
 use std::time::Instant;
 use std::thread;
 use crossbeam_channel as cbc;
+extern crate timer;
+
+struct Timer {
+    tx: cbc::Sender,
+    
+}
+#[derive(Debug,Clone,Copy)]
+struct doorTimer {
+    tx: cbc::Sender,
+    timer: timer::Timer,
+    guard: timer::Guard
+}
+
+impl doorTimer {
+    fn new(timer_tx) {
+        DoorTimer{
+        tx: timer_tx,
+        timer: timer::MessageTimer::new(timer_tx),
+        guard: None
+        }
+    }
+    fn start(mut self) {
+        self.guard: self.timer.schedule_with_delay(Duration::from_secs(3),self.tx.send(()));
+    }
+
+    fn restart(mut self) {
+        if guard != None {
+            drop(self.guard);
+            self.guard = self.timer.schedule_with_delay(Duration::from_secs(3),self.tx.send());
+        }
+    }
+
+    fn cancel(mut self) {
+        if guard != None {
+            guard: drop(self.guard);
+            self.guard = None;
+        }
+    }
+
+
+}
 
 /*
 /**

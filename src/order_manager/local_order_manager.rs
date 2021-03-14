@@ -202,4 +202,5 @@ mod test {
         order_list.add_order(CallButton{floor: 0, call: 1});
         assert!(!order_above(&order_list, 3));
     }
+
 }

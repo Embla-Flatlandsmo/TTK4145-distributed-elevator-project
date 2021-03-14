@@ -3,7 +3,9 @@ use crate::elevio::elev as elevio;
 use crate::elevio::poll;
 use crate::order_manager::local_order_manager;
 use crate::order_manager::order_list;
+use std::time::Duration;
 use crossbeam_channel as cbc;
+extern crate timer;
 
 /// Contains all we need to know about our elevator.
 /// * `hw_tx` the transmitter for sending hardware commands
@@ -41,7 +43,7 @@ pub enum Event {
 pub const DOOR_OPEN_TIME: u8 = 3;
 
 impl Elevator {
-    pub fn new(n_floors: u8, hw_commander: cbc::Sender<elevio::HardwareCommand>) -> Elevator {
+    pub fn new(n_floors: u8, hw_commander: cbc::Sender<elevio::HardwareCommand>, timer_tx: cbc::Sender<>) -> Elevator {
         hw_commander
             .send(elevio::HardwareCommand::MotorDirection {
                 dirn: elevio::DIRN_DOWN,
@@ -64,6 +66,7 @@ impl Elevator {
             (State::DoorOpen, Event::OnNewOrder { btn }) => on_new_order(self, btn),
             (State::Moving, Event::OnNewOrder { btn }) => on_new_order(self, btn),
             (State::DoorOpen, Event::OnDoorTimeOut) => on_door_time_out(self),
+            (State::DoorOpen, Event::OnObstructionSignal) => on_obstruction_signal(self),
             (State::Moving, Event::OnFloorArrival { floor }) => on_floor_arrival(self, floor),
             (State::Initializing, Event::OnFloorArrival { floor }) => on_floor_arrival(self, floor),
             (State::Initializing, Event::OnNewOrder { btn }) => self,
@@ -140,9 +143,7 @@ fn on_door_time_out(mut elev: Elevator) -> Elevator {
 
 fn on_new_order(mut elev: Elevator, btn: poll::CallButton) -> Elevator {
     let state = elev.get_state();
-    //let hw_tx = elev.get_hw_tx_handle();
-    //let mut tmp_orders = elev.get_orders();
-
+    
     match state {
         State::DoorOpen => {
             if elev.get_floor() == btn.floor {
@@ -151,16 +152,6 @@ fn on_new_order(mut elev: Elevator, btn: poll::CallButton) -> Elevator {
             } else {
                 elev.orders.add_order(btn);
                 return elev;
-                /*
-                tmp_orders.add_order(btn);
-                return Elevator {
-                    hw_tx: elev.hw_tx,
-                    floor: elev.floor,
-                    dirn: elev.dirn,
-                    state: elev.state,
-                    orders: tmp_orders,
-                };
-                */
             }
         }
         State::Moving => {
@@ -224,24 +215,13 @@ fn on_floor_arrival(mut elev: Elevator, new_floor: u8) -> Elevator {
                 elev.hw_tx
                     .send(elevio::HardwareCommand::DoorLight { on: true })
                     .unwrap();
-                let mut new_orders = elev.get_orders();
-                new_orders.clear_orders_on_floor(new_floor);
                 //Start timer
-                return Elevator {
-                    hw_tx: elev.hw_tx,
-                    floor: new_floor,
-                    dirn: elev.dirn,
-                    state: State::DoorOpen,
-                    orders: new_orders,
-                };
+                elev.orders.clear_orders_on_floor(new_floor);
+                elev.state = State::DoorOpen;
+                return elev;
             } else {
-                return Elevator {
-                    hw_tx: elev.hw_tx,
-                    floor: new_floor,
-                    dirn: elev.dirn,
-                    state: elev.state,
-                    orders: elev.orders,
-                };
+                elev.floor = new_floor;
+                return elev;
             }
         }
         State::Initializing => {
@@ -250,13 +230,8 @@ fn on_floor_arrival(mut elev: Elevator, new_floor: u8) -> Elevator {
                     dirn: elevio::DIRN_STOP,
                 })
                 .unwrap();
-            return Elevator {
-                hw_tx: elev.hw_tx,
-                floor: new_floor,
-                dirn: elev.dirn,
-                state: State::Idle,
-                orders: elev.orders,
-            };
+                elev.state = State::Idle;
+                return elev;
         }
         _ => elev,
     }
@@ -264,6 +239,9 @@ fn on_floor_arrival(mut elev: Elevator, new_floor: u8) -> Elevator {
 
 fn notifyPeerInfo() { /* Some logic for sending a message that PeerInfo uses to update its info on the local elevator? */
 }
+
+
+
 
 #[cfg(test)]
 mod test {

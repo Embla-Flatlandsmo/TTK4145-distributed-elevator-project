@@ -27,10 +27,6 @@ mod fsm {
     pub mod elevatorfsm;
 }
 
-mod timer{
-    pub mod timer;
-}
-
 use elevio::elev as e;
 
 use fsm::elevatorfsm::Event as Event;
@@ -148,7 +144,7 @@ fn main() -> std::io::Result<()> {
             elevio::poll::call_buttons(elevator, call_button_tx, poll_period) 
         });
     }
-    
+
     let (floor_sensor_tx, floor_sensor_rx) = cbc::unbounded::<u8>();    
     {
         let elevator = elevator.clone();
@@ -194,10 +190,7 @@ fn main() -> std::io::Result<()> {
             recv(custom_data_recv_rx) -> a => {
                 let cd = a.unwrap();
                 println!("{:#?}", cd);
-            }
-        }
-
-        cbc::select! {
+            },
             recv(call_button_rx) -> a => {
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);
@@ -208,28 +201,11 @@ fn main() -> std::io::Result<()> {
                 let floor = a.unwrap();
                 fsm = fsm.transition(Event::OnFloorArrival{floor: floor});
                 println!("Floor: {:#?}", floor);
-                /*
-                println!("Floor: {:#?}", floor);
-                    if floor == 0 {
-                        //e::DIRN_UP
-                    } else if floor == elev_num_floors-1 {
-                        //e::DIRN_DOWN
-                    } else {
-                        //dirn
-                    };
-                //elevator.motor_direction(dirn);
-                */
+
             },
             recv(stop_button_rx) -> a => {
                 let stop = a.unwrap();
-                /*
-                println!("Stop button: {:#?}", stop);
-                for f in 0..elev_num_floors {
-                    for c in 0..3 {
-                        elevator.call_button_light(f, c, false);
-                    }
-                }
-                */
+                // This elevator doesn't care about stopping
             },
             recv(obstruction_rx) -> a => {
                 let obstr = a.unwrap();
