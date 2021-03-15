@@ -1,15 +1,15 @@
-use std::thread::*;
-use std::time;
-use std::process;
 use std::env;
 use std::net;
+use std::process;
+use std::thread::*;
+use std::time;
 
 use crossbeam_channel as cbc;
 use serde;
 
 mod network {
-    pub mod peers;
     pub mod bcast;
+    pub mod peers;
 }
 
 mod elevio {
@@ -23,14 +23,14 @@ mod order_manager {
 }
 
 pub mod fsm {
-    pub mod elevatorfsm;
     pub mod door_timer;
+    pub mod elevatorfsm;
 }
 
 use elevio::elev as e;
 use fsm::door_timer;
 
-use fsm::elevatorfsm::Event as Event;
+use fsm::elevatorfsm::Event;
 
 // Data types to be sent on the network must derive traits for serialization
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -38,7 +38,6 @@ struct CustomDataType {
     message: String,
     iteration: u64,
 }
-
 
 pub const DOOR_OPEN_TIME: u64 = 3;
 
@@ -49,46 +48,43 @@ fn main() -> std::io::Result<()> {
     let id = if args.len() > 1 {
         args[1].clone()
     } else {
-        let local_ip = net::TcpStream::connect("8.8.8.8:53").unwrap().local_addr().unwrap().ip();
+        let local_ip = net::TcpStream::connect("8.8.8.8:53")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .ip();
         format!("rust@{}#{}", local_ip, process::id())
     };
-
 
     let msg_port = 19735;
     let peer_port = 19738;
 
-    
     // The sender for peer discovery
     let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
     {
         let id = id.clone();
-        spawn(move ||{
+        spawn(move || {
             network::peers::tx(peer_port, id, peer_tx_enable_rx);
         });
     }
     // (periodically disable/enable the peer broadcast, to provoke new peer / peer loss messages)
-    spawn(move ||{
-        loop {
-            sleep(time::Duration::new(6, 0));
-            peer_tx_enable_tx.send(false).unwrap();
-            sleep(time::Duration::new(3, 0));
-            peer_tx_enable_tx.send(true).unwrap();
-        }
+    spawn(move || loop {
+        sleep(time::Duration::new(6, 0));
+        peer_tx_enable_tx.send(false).unwrap();
+        sleep(time::Duration::new(3, 0));
+        peer_tx_enable_tx.send(true).unwrap();
     });
-    
     // The receiver for peer discovery updates
     let (peer_update_tx, peer_update_rx) = cbc::unbounded::<network::peers::PeerUpdate>();
-    spawn(move ||{
+    spawn(move || {
         network::peers::rx(peer_port, peer_update_tx);
     });
-    
-    
     // Periodically produce a custom data message
     let (custom_data_send_tx, custom_data_send_rx) = cbc::unbounded::<CustomDataType>();
     {
         let id = id.clone();
-        spawn(move ||{
-            let mut cd = CustomDataType{
+        spawn(move || {
+            let mut cd = CustomDataType {
                 message: format!("Hello from node {}", id),
                 iteration: 0,
             };
@@ -100,30 +96,25 @@ fn main() -> std::io::Result<()> {
         });
     }
     // The sender for our custom data
-    spawn(move ||{
+    spawn(move || {
         network::bcast::tx(msg_port, custom_data_send_rx);
     });
     // The receiver for our custom data
     let (custom_data_recv_tx, custom_data_recv_rx) = cbc::unbounded::<CustomDataType>();
-    spawn(move ||{
+    spawn(move || {
         network::bcast::rx(msg_port, custom_data_recv_tx);
     });
-
-
 
     /*----------------SINGLE ELEVATOR---------------------*/
     let elev_num_floors = 4;
     let elevator = e::ElevatorHW::init("localhost:15657", elev_num_floors)?;
-    println!("Elevator started:\n{:#?}", elevator);    
+    println!("Elevator started:\n{:#?}", elevator);
 
-    /* We should do something about all these fsms :^) 
-    * Here, we initialize the fsm and transitions it into downwards moving (is there a better way to solve this?)
-    */
-
-    let (hardware_command_tx, hardware_command_rx) = cbc::unbounded::<elevio::elev::HardwareCommand>();
+    let (hardware_command_tx, hardware_command_rx) =
+        cbc::unbounded::<elevio::elev::HardwareCommand>();
     let (door_timer_start_tx, door_timer_start_rx) = cbc::unbounded::<door_timer::TimerCommand>();
     let (door_timeout_tx, door_timeout_rx) = cbc::unbounded::<()>();
-    // Initialize the door timer
+    /* Thread that keeps track of the door timer */
     spawn(move || {
         let mut door_timer: door_timer::Timer = door_timer::Timer::new(DOOR_OPEN_TIME);
         loop {
@@ -138,58 +129,46 @@ fn main() -> std::io::Result<()> {
         }
     });
 
-    let mut fsm = fsm::elevatorfsm::Elevator::new(elev_num_floors,hardware_command_tx, door_timer_start_tx);
-
-    /* Spawn a thread that executes elevator commands sent from fsm on server */
+    /* Spawn a thread that executes elevator commands sent from fsm */
     {
         let elevator = elevator.clone();
-        spawn(move ||{
-            loop {
-                let r = hardware_command_rx.recv();
-                match r {
-                    Ok(c) => elevator.execute_command(c),
-                    Err(_e) => {}
-                }
+        spawn(move || loop {
+            let r = hardware_command_rx.recv();
+            match r {
+                Ok(c) => elevator.execute_command(c),
+                Err(_e) => {}
             }
         });
     }
-    
+
+    let mut fsm =
+        fsm::elevatorfsm::Elevator::new(elev_num_floors, hardware_command_tx, door_timer_start_tx);
+
+    /* Initialization of hardware polling */
     let poll_period = time::Duration::from_millis(25);
-    
     let (call_button_tx, call_button_rx) = cbc::unbounded::<elevio::poll::CallButton>();
     {
         let elevator = elevator.clone();
-        spawn(move ||{
-            elevio::poll::call_buttons(elevator, call_button_tx, poll_period) 
-        });
+        spawn(move || elevio::poll::call_buttons(elevator, call_button_tx, poll_period));
     }
 
-    let (floor_sensor_tx, floor_sensor_rx) = cbc::unbounded::<u8>();    
+    let (floor_sensor_tx, floor_sensor_rx) = cbc::unbounded::<u8>();
     {
         let elevator = elevator.clone();
-        spawn(move ||{
-            elevio::poll::floor_sensor(elevator, floor_sensor_tx, poll_period)
-        });
+        spawn(move || elevio::poll::floor_sensor(elevator, floor_sensor_tx, poll_period));
     }
-    
-    let (stop_button_tx, stop_button_rx) = cbc::unbounded::<bool>();    
+
+    let (stop_button_tx, stop_button_rx) = cbc::unbounded::<bool>();
     {
         let elevator = elevator.clone();
-        spawn(move ||{
-            elevio::poll::stop_button(elevator, stop_button_tx, poll_period)
-        });
+        spawn(move || elevio::poll::stop_button(elevator, stop_button_tx, poll_period));
     }
-    
-    let (obstruction_tx, obstruction_rx) = cbc::unbounded::<bool>();    
+
+    let (obstruction_tx, obstruction_rx) = cbc::unbounded::<bool>();
     {
         let elevator = elevator.clone();
-        spawn(move ||{
-            elevio::poll::obstruction(elevator, obstruction_tx, poll_period)
-        });
+        spawn(move || elevio::poll::obstruction(elevator, obstruction_tx, poll_period));
     }
-    
-    
-    // main body: receive peer updates and data from the network
     loop {
         cbc::select! {
             recv(peer_update_rx) -> a => {
@@ -224,7 +203,6 @@ fn main() -> std::io::Result<()> {
                 a.unwrap();
                 fsm.on_event(Event::OnDoorTimeOut);
             }
-    	}
+        }
     }
-
 }

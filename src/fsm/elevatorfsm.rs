@@ -39,7 +39,7 @@ pub enum Event {
     OnDoorTimeOut,
     OnFloorArrival { floor: u8 },
     OnNewOrder { btn: poll::CallButton },
-    OnObstructionSignal {active: bool},
+    OnObstructionSignal { active: bool },
 }
 
 pub const DOOR_OPEN_TIME: u64 = 3;
@@ -67,7 +67,6 @@ impl Elevator {
             orders: order_list::OrderList::new(n_floors),
         };
     }
-    
     /// Takes the elevator fsm from one state to the next and sends the appropriate hardware commands on the hardware channel
     #[allow(unreachable_patterns)]
     pub fn on_event(&mut self, event: Event) {
@@ -75,7 +74,7 @@ impl Elevator {
             Event::OnDoorTimeOut => self.on_door_time_out(),
             Event::OnFloorArrival { floor } => self.on_floor_arrival(floor),
             Event::OnNewOrder { btn } => self.on_new_order(btn),
-            Event::OnObstructionSignal {active} => self.on_obstruction_signal(active),
+            Event::OnObstructionSignal { active } => self.on_obstruction_signal(active),
             _ => panic!("Invalid event: {:#?}", event),
         }
     }
@@ -100,7 +99,7 @@ impl Elevator {
         let state = self.get_state();
         let hw_tx = self.get_hw_tx_handle();
         match state {
-            State::DoorOpen => {    
+            State::DoorOpen => {
                 hw_tx
                     .send(elevio::HardwareCommand::DoorLight { on: false })
                     .unwrap();
@@ -117,7 +116,7 @@ impl Elevator {
                     self.state = State::Moving;
                 }
             }
-            _ => panic!("Door timed out in state {:#?}", state)
+            _ => panic!("Door timed out in state {:#?}", state),
         }
     }
 
@@ -141,9 +140,7 @@ impl Elevator {
                     self.state = State::DoorOpen;
                     //Start timer
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
-
                 } else {
-
                     self.floor = new_floor;
                 }
             }
@@ -155,7 +152,7 @@ impl Elevator {
                     .unwrap();
                 self.state = State::Idle;
             }
-            _ => {},
+            _ => {}
         }
     }
 
@@ -205,7 +202,7 @@ impl Elevator {
                     self.dirn = new_dirn;
                 }
             }
-            _ => panic!("Tried to add new order in invalid state: {:#?}", state)
+            _ => panic!("Tried to add new order in invalid state: {:#?}", state),
         }
     }
 
@@ -214,15 +211,24 @@ impl Elevator {
         if state == State::DoorOpen {
             match active {
                 true => self.timer_start_tx.send(TimerCommand::Start).unwrap(),
-                false => self.timer_start_tx.send(TimerCommand::Cancel).unwrap()
+                false => self.timer_start_tx.send(TimerCommand::Cancel).unwrap(),
             }
         }
     }
 }
 
-fn clear_all_order_lights_on_floor(hw_tx: &crossbeam_channel::Sender<elevio::HardwareCommand>, floor: u8) {
+fn clear_all_order_lights_on_floor(
+    hw_tx: &crossbeam_channel::Sender<elevio::HardwareCommand>,
+    floor: u8,
+) {
     for c in 0..3 {
-        hw_tx.send(elevio::HardwareCommand::CallButtonLight{floor: floor, call: c, on: false}).unwrap();
+        hw_tx
+            .send(elevio::HardwareCommand::CallButtonLight {
+                floor: floor,
+                call: c,
+                on: false,
+            })
+            .unwrap();
     }
 }
 
@@ -311,7 +317,6 @@ mod test {
             })
         );
     }
-
 
     #[test]
     fn it_opens_door_at_ordered_floor() {
