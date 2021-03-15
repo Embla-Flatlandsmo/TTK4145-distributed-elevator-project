@@ -129,7 +129,7 @@ fn main() -> std::io::Result<()> {
         loop {
             let r = door_timer_start_rx.try_recv();
             match r {
-                Ok(r) => door_timer.start(),
+                Ok(_r) => door_timer.start(),
                 _ => {}
             }
             if door_timer.did_expire() {
@@ -218,11 +218,9 @@ fn main() -> std::io::Result<()> {
             },
             recv(obstruction_rx) -> a => {
                 let obstr = a.unwrap();
-                /* Logic for restarting the timer */
-                /*
-                println!("Obstruction: {:#?}", obstr);
-                elevator.motor_direction(if obstr { e::DIRN_STOP } else { dirn });
-                */
+                if obstr {
+                    fsm.on_event(Event::OnObstructionSignal);
+                }
             },
             recv(door_timeout_rx) -> a => {
                 a.unwrap();

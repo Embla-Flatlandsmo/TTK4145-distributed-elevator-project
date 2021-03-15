@@ -3,7 +3,7 @@ use crate::fsm::elevatorfsm as elevatorfsm;
 use crate::elevio::elev::{DIRN_DOWN, DIRN_STOP, DIRN_UP};
 
 
-pub fn order_chooseDirection(fsm: &mut elevatorfsm::Elevator) -> u8 {
+pub fn choose_direction(fsm: &mut elevatorfsm::Elevator) -> u8 {
     let dirn = fsm.get_dirn();
     let order_list = fsm.get_orders();
     let floor = usize::from(fsm.get_floor());
@@ -20,16 +20,17 @@ pub fn order_chooseDirection(fsm: &mut elevatorfsm::Elevator) -> u8 {
             else if orders_above {return DIRN_UP;}
             else {return DIRN_STOP;}
         },
+        /*
         DIRN_STOP => {
             if orders_below {return DIRN_DOWN;}
             else if orders_above {return DIRN_UP;}
             else {return DIRN_STOP;}
-        },
+        },*/
         _ => DIRN_STOP
     }
 }
 
-pub fn order_shouldStop(fsm: &mut elevatorfsm::Elevator) -> bool {
+pub fn should_stop(fsm: &mut elevatorfsm::Elevator) -> bool {
     let dirn = fsm.get_dirn();
     let order_list = fsm.get_orders();
     let floor = usize::from(fsm.get_floor());
@@ -73,7 +74,7 @@ fn order_above(order_list: &order_list::OrderList, floor: usize) -> bool {
 }
 
 fn single_queue_order_below(queue: &[bool], floor: usize) -> bool {
-    for &order in queue.iter().take(floor+1) {
+    for &order in queue.iter().take(floor) {
         if order {
             return true;
         }
@@ -82,7 +83,7 @@ fn single_queue_order_below(queue: &[bool], floor: usize) -> bool {
 }
 
 fn single_queue_order_above(queue: &[bool], floor: usize) -> bool {
-    for &order in queue.iter().skip(floor) {
+    for &order in queue.iter().skip(floor+1) {
         if order {
             return true;
         }
@@ -94,6 +95,7 @@ fn single_queue_order_above(queue: &[bool], floor: usize) -> bool {
 mod test {
     use super::*; 
     use crate::elevio::poll::CallButton;
+
     #[test]
     fn it_finds_order_above() {
         let mut order_list = order_list::OrderList::new(5);
@@ -105,7 +107,7 @@ mod test {
     #[test]
     fn it_finds_order_in_the_top() {
         let mut order_list = order_list::OrderList::new(5);
-        order_list.add_order(CallButton{floor: 5, call: 2});
+        order_list.add_order(CallButton{floor: 4, call: 2});
         assert!(order_above(&order_list, 1));
     }
 

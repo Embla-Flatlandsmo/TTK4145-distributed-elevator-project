@@ -1,5 +1,5 @@
 //! Fast and easy order management to be used for both local and global queues!
-
+#![allow(dead_code)]
 use crate::elevio::poll as elevio;
 use std::vec::Vec;
 
