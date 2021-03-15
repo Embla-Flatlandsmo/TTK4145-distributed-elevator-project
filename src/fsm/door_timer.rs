@@ -1,8 +1,3 @@
-use std::time::Duration;
-use std::time::Instant;
-use std::thread;
-use crossbeam_channel as cbc;
-
 #[derive(Clone,Copy,Debug)]
 pub struct Timer {
     start_time: std::time::Instant,
@@ -15,17 +10,18 @@ impl Timer {
         Timer {
             start_time: std::time::Instant::now(),
             timeout_time: std::time::Duration::new(timeout_sec,0),
-            did_notify: false
+            did_notify: true
         }
     }
 
-    pub fn start(mut self) {
+    pub fn start(&mut self) {
         self.start_time = std::time::Instant::now();
         self.did_notify = false;
     }
 
-    pub fn did_expire(self) -> bool {
+    pub fn did_expire(&mut self) -> bool {
         if (self.start_time.elapsed() > self.timeout_time) && !self.did_notify {
+            self.did_notify = true;
             return true;
         } else {
             return false;

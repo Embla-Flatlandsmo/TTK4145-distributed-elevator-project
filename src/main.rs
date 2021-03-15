@@ -125,7 +125,7 @@ fn main() -> std::io::Result<()> {
     let (door_timeout_tx, door_timeout_rx) = cbc::unbounded::<()>();
     // Initialize the door timer
     spawn(move || {
-        let door_timer: door_timer::Timer = door_timer::Timer::new(DOOR_OPEN_TIME);
+        let mut door_timer: door_timer::Timer = door_timer::Timer::new(DOOR_OPEN_TIME);
         loop {
             let r = door_timer_start_rx.try_recv();
             match r {
