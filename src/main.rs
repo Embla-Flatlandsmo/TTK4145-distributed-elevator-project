@@ -22,7 +22,7 @@ mod order_manager {
     pub mod order_list;
 }
 
-mod fsm {
+pub mod fsm {
     pub mod elevatorfsm;
     pub mod door_timer;
 }
@@ -121,7 +121,7 @@ fn main() -> std::io::Result<()> {
     */
 
     let (hardware_command_tx, hardware_command_rx) = cbc::unbounded::<elevio::elev::HardwareCommand>();
-    let (door_timer_start_tx, door_timer_start_rx) = cbc::unbounded::<()>();
+    let (door_timer_start_tx, door_timer_start_rx) = cbc::unbounded::<door_timer::TimerCommand>();
     let (door_timeout_tx, door_timeout_rx) = cbc::unbounded::<()>();
     // Initialize the door timer
     spawn(move || {
@@ -129,7 +129,7 @@ fn main() -> std::io::Result<()> {
         loop {
             let r = door_timer_start_rx.try_recv();
             match r {
-                Ok(_r) => door_timer.start(),
+                Ok(r) => door_timer.on_command(r),
                 _ => {}
             }
             if door_timer.did_expire() {
@@ -194,11 +194,11 @@ fn main() -> std::io::Result<()> {
         cbc::select! {
             recv(peer_update_rx) -> a => {
                 let update = a.unwrap();
-                println!("{:#?}", update);
+                //println!("{:#?}", update);
             }
             recv(custom_data_recv_rx) -> a => {
                 let cd = a.unwrap();
-                println!("{:#?}", cd);
+                //println!("{:#?}", cd);
             },
             recv(call_button_rx) -> a => {
                 let call_button = a.unwrap();
@@ -213,14 +213,12 @@ fn main() -> std::io::Result<()> {
 
             },
             recv(stop_button_rx) -> a => {
-                let stop = a.unwrap();
+                let _stop = a.unwrap();
                 // This elevator doesn't care about stopping
             },
             recv(obstruction_rx) -> a => {
                 let obstr = a.unwrap();
-                if obstr {
-                    fsm.on_event(Event::OnObstructionSignal);
-                }
+                fsm.on_event(Event::OnObstructionSignal{active: obstr})
             },
             recv(door_timeout_rx) -> a => {
                 a.unwrap();
