@@ -175,6 +175,16 @@ impl Elevator {
                         .unwrap();
                 }
             }
+            State::Obstructed => {
+                self.orders.add_order(btn);
+                self.hw_tx
+                    .send(elevio::HardwareCommand::CallButtonLight {
+                        floor: btn.floor,
+                        call: btn.call,
+                        on: true,
+                    })
+                    .unwrap();
+            }
             State::Moving => {
                 self.orders.add_order(btn);
                 self.hw_tx
@@ -202,16 +212,23 @@ impl Elevator {
                     self.dirn = new_dirn;
                 }
             }
+            State::Initializing => {},
             _ => panic!("Tried to add new order in invalid state: {:#?}", state),
         }
     }
 
     fn on_obstruction_signal(&mut self, active: bool) {
         let state = self.get_state();
-        if state == State::DoorOpen {
+        if state == State::DoorOpen || state == State::Obstructed {
             match active {
-                true => self.timer_start_tx.send(TimerCommand::Start).unwrap(),
-                false => self.timer_start_tx.send(TimerCommand::Cancel).unwrap(),
+                true => {
+                    self.timer_start_tx.send(TimerCommand::Cancel).unwrap();
+                    self.state = State::Obstructed
+                }
+                false => {
+                    self.timer_start_tx.send(TimerCommand::Start).unwrap();
+                    self.state = State::DoorOpen
+                }
             }
         }
     }
