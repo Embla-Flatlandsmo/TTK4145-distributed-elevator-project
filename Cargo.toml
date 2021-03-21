@@ -16,3 +16,7 @@ timer = "0.2.0"
 [[bin]]
 name = "project-gruppe47"
 path = "src/main.rs"
+
+[lib]
+name = "elevator"
+path = "src/lib.rs"

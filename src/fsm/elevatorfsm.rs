@@ -95,6 +95,13 @@ impl Elevator {
         return self.orders.clone();
     }
 
+    pub fn get_simulation_elevator(&self) -> Elevator{
+        let mut elev = self.clone();
+        drop(elev.hw_tx);
+        drop(elev.timer_start_tx);
+        return elev;
+    }
+
     fn on_door_time_out(&mut self) {
         let state = self.get_state();
         let hw_tx = self.get_hw_tx_handle();

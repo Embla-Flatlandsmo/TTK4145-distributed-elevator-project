@@ -3,33 +3,13 @@ use std::net;
 use std::process;
 use std::thread::*;
 use std::time;
+use elevator::*;
 
 use crossbeam_channel as cbc;
 use serde;
 
-mod network {
-    pub mod bcast;
-    pub mod peers;
-}
-
-mod elevio {
-    pub mod elev;
-    pub mod poll;
-}
-
-mod order_manager {
-    pub mod local_order_manager;
-    pub mod order_list;
-}
-
-pub mod fsm {
-    pub mod door_timer;
-    pub mod elevatorfsm;
-}
-
 use elevio::elev as e;
 use fsm::door_timer;
-
 use fsm::elevatorfsm::Event;
 
 // Data types to be sent on the network must derive traits for serialization
