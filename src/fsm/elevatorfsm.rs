@@ -95,10 +95,14 @@ impl Elevator {
         return self.orders.clone();
     }
 
-    pub fn get_simulation_elevator(&self) -> Elevator{
+    pub fn get_simulation_elevator(
+        &self,
+        dummy_hw_tx: cbc::Sender<elevio::HardwareCommand>,
+        dummy_timer_start_tx: cbc::Sender<TimerCommand>,
+    ) -> Elevator {
         let mut elev = self.clone();
-        drop(elev.hw_tx);
-        drop(elev.timer_start_tx);
+        elev.hw_tx = dummy_hw_tx;
+        elev.timer_start_tx = dummy_timer_start_tx;
         return elev;
     }
 
@@ -219,7 +223,7 @@ impl Elevator {
                     self.dirn = new_dirn;
                 }
             }
-            State::Initializing => {},
+            State::Initializing => {}
             _ => panic!("Tried to add new order in invalid state: {:#?}", state),
         }
     }
