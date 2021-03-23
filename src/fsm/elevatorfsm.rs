@@ -169,52 +169,47 @@ impl Elevator {
 
     fn on_new_order(&mut self, btn: poll::CallButton) {
         let state = self.get_state();
+        let turn_on_call_btn_light = elevio::HardwareCommand::CallButtonLight {
+            floor: btn.floor,
+            call: btn.call,
+            on: true
+        };
 
         match state {
             State::DoorOpen => {
                 if self.get_floor() == btn.floor {
                     //start timer
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
-                } else {
-                    self.orders.add_order(btn);
-                    self.hw_tx
-                        .send(elevio::HardwareCommand::CallButtonLight {
-                            floor: btn.floor,
-                            call: btn.call,
-                            on: true,
-                        })
-                        .unwrap();
                 }
+                self.orders.add_order(btn);
+                self.hw_tx
+                    .send(turn_on_call_btn_light)
+                    .unwrap();
             }
             State::Obstructed => {
                 self.orders.add_order(btn);
                 self.hw_tx
-                    .send(elevio::HardwareCommand::CallButtonLight {
-                        floor: btn.floor,
-                        call: btn.call,
-                        on: true,
-                    })
+                    .send(turn_on_call_btn_light)
                     .unwrap();
             }
             State::Moving => {
                 self.orders.add_order(btn);
                 self.hw_tx
-                    .send(elevio::HardwareCommand::CallButtonLight {
-                        floor: btn.floor,
-                        call: btn.call,
-                        on: true,
-                    })
+                    .send(turn_on_call_btn_light)
                     .unwrap();
             }
             State::Idle => {
+                self.orders.add_order(btn);
+                self.hw_tx
+                .send(turn_on_call_btn_light)
+                .unwrap();
                 if self.get_floor() == btn.floor {
                     self.hw_tx
                         .send(elevio::HardwareCommand::DoorLight { on: true })
                         .unwrap();
-                    //timer start
+                    self.timer_start_tx.send(TimerCommand::Start).unwrap();
                     self.state = State::DoorOpen;
                 } else {
-                    self.orders.add_order(btn);
                     let new_dirn: u8 = local_order_manager::choose_direction(self);
                     self.hw_tx
                         .send(elevio::HardwareCommand::MotorDirection { dirn: new_dirn })

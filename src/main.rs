@@ -163,7 +163,6 @@ fn main() -> std::io::Result<()> {
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);
                 fsm.on_event(Event::OnNewOrder{btn: call_button});
-                elevator.call_button_light(call_button.floor, call_button.call, true);
             },
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
