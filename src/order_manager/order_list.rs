@@ -7,10 +7,12 @@ use std::vec::Vec;
 ///
 /// # Example
 /// ```rust
+/// use elevator::elevio::poll::CallButton;
+/// use elevator::order_manager::order_list::OrderList;
 /// let num_floors = 4;
-/// let global_orders = OrderList::new(num_floors);
-/// let call_button_corresponding_to_order = CallButton{floor: 2, call: 1}
-/// global_orders.add_order(call_button_corresponding_to_order)
+/// let mut elevator_orders = OrderList::new(num_floors);
+/// let call_button_corresponding_to_order = CallButton{floor: 2, call: 1};
+/// elevator_orders.add_order(call_button_corresponding_to_order)
 /// ```
 ///
 #[derive(PartialEq, Clone, Debug)]

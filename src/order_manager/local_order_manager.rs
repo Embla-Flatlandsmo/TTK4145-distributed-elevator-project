@@ -129,7 +129,7 @@ mod test {
     fn it_finds_order_below() {
         let mut order_list = order_list::OrderList::new(5);
         order_list.add_order(CallButton { floor: 3, call: 0 });
-        order_list.add_order(CallButton { floor: 1, call: 2 });
+        order_list.add_order(CallButton { floor: 0, call: 2 });
         assert!(order_below(&order_list, 1));
     }
 
