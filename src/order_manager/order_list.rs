@@ -3,6 +3,13 @@
 use crate::elevio::poll as elevio;
 use std::vec::Vec;
 
+//TODO!!!!!!!
+struct OrderTypes {
+    Confirmed,
+    Pending,
+    None
+}
+
 /// Utility struct for managing local or global orders
 ///
 /// # Example
@@ -69,6 +76,18 @@ impl OrderList {
     ///
     pub fn add_order(&mut self, button: elevio::CallButton) {
         self.modify_order(button, true);
+    }
+
+    pub fn merge_hall_orders(&mut self, orders: OrderList) {
+        if self.n_floors != orders.n_floors {
+            panic!("Tried to merge elevator orders of different lengths :(")
+        }
+
+        for i in 0..=self.n_floors-1{
+            self.up_queue[i] = self.up_queue[i] || orders.up_queue[i];
+            self.down_queue[i] = self.down_queue[i] || orders.down_queue[i];
+        }
+
     }
 
     fn modify_order(&mut self, button: elevio::CallButton, add_or_remove: bool) {

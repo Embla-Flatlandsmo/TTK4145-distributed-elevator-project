@@ -36,7 +36,7 @@ fn main() -> std::io::Result<()> {
         format!("rust@{}#{}", local_ip, process::id())
     };
 
-    let msg_port = 19735;
+    let msg_port = 19747;
     let peer_port = 19738;
 
     // The sender for peer discovery
@@ -149,10 +149,17 @@ fn main() -> std::io::Result<()> {
         let elevator = elevator.clone();
         spawn(move || elevio::poll::obstruction(elevator, obstruction_tx, poll_period));
     }
+
+    let (elevator_info_timeout_tx, elevator_info_timeout_rx) = cbc::unbounded::<u8>();
+    {
+        
+    }
+
     loop {
         cbc::select! {
             recv(peer_update_rx) -> a => {
                 let update = a.unwrap();
+
                 //println!("{:#?}", update);
             }
             recv(custom_data_recv_rx) -> a => {
@@ -181,6 +188,9 @@ fn main() -> std::io::Result<()> {
             recv(door_timeout_rx) -> a => {
                 a.unwrap();
                 fsm.on_event(Event::OnDoorTimeOut);
+            },
+            recv(elevator_info_timeout_rx) -> a => {
+                global_elevator_info.on_orders_timed_out(a.unwrap());
             }
         }
     }

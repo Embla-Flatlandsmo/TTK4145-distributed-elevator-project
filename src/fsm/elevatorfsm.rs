@@ -3,6 +3,7 @@ use crate::elevio::elev as elevio;
 use crate::elevio::poll;
 use crate::order_manager::local_order_manager;
 use crate::order_manager::order_list;
+use serde;
 
 use crate::fsm::door_timer::TimerCommand;
 
@@ -18,11 +19,13 @@ use crossbeam_channel as cbc;
 pub struct Elevator {
     hw_tx: crossbeam_channel::Sender<elevio::HardwareCommand>,
     timer_start_tx: cbc::Sender<TimerCommand>,
+    info: ElevatorInfo /*
     state: State,
     dirn: u8,
     floor: u8,
-    orders: order_list::OrderList,
+    orders: order_list::OrderList,*/
 }
+/** TODO: Refactor state, dirn, floor, orders */
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum State {

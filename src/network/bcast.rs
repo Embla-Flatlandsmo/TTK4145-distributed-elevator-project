@@ -14,7 +14,11 @@ pub fn tx<T: serde::Serialize>(port: u16, ch: cbc::Receiver<T>){
     loop {
         let data = ch.recv().unwrap();
         let serialized = serde_json::to_string(&data).unwrap();
-        s.send(serialized.as_bytes()).unwrap();
+        let res = s.send(serialized.as_bytes());
+        match res {
+            Ok(res) => {},
+            Err(res) => {println!("Couldn't send bcast");}
+        }
     }
 }
 
