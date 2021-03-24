@@ -33,9 +33,17 @@ use fsm::door_timer;
 use fsm::elevatorfsm::Event;
 
 // Data types to be sent on the network must derive traits for serialization
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct order_t {
+    node: String,
+    floor: u64,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 struct CustomDataType {
     message: String,
+    order: order_t,
     iteration: u64,
 }
 
@@ -84,8 +92,13 @@ fn main() -> std::io::Result<()> {
     {
         let id = id.clone();
         spawn(move || {
+            let new_order = order_t {
+                node: "192.168.1.1".to_string(),
+                floor: 2,
+            };
             let mut cd = CustomDataType {
                 message: format!("Hello from node {}", id),
+                order: new_order,
                 iteration: 0,
             };
             loop {
@@ -173,11 +186,11 @@ fn main() -> std::io::Result<()> {
         cbc::select! {
             recv(peer_update_rx) -> a => {
                 let update = a.unwrap();
-                //println!("{:#?}", update);
+                println!("{:#?}", update);
             }
             recv(custom_data_recv_rx) -> a => {
                 let cd = a.unwrap();
-                //println!("{:#?}", cd);
+                println!("{:#?}", cd);
             },
             recv(call_button_rx) -> a => {
                 let call_button = a.unwrap();
@@ -206,3 +219,4 @@ fn main() -> std::io::Result<()> {
         }
     }
 }
+
