@@ -22,7 +22,7 @@ struct OrderTypes {
 /// elevator_orders.add_order(call_button_corresponding_to_order)
 /// ```
 ///
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct OrderList {
     n_floors: usize,
     pub up_queue: Vec<bool>,

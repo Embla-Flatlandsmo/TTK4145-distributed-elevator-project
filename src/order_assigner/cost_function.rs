@@ -1,6 +1,7 @@
 use crate::elevio::{elev, poll};
 use crate::fsm::door_timer::TimerCommand;
 use crate::fsm::elevatorfsm::*;
+use crate::network::elevator_info;
 use crate::order_manager::local_order_manager;
 use crossbeam_channel as cbc;
 
@@ -12,11 +13,12 @@ pub const TRAVEL_TIME: u64 = 2;
 /// `fsm` - elevator to simulate
 ///
 /// `button` - Button corresponding to order we want to add.
-pub fn time_to_idle(mut fsm: &Elevator, button: poll::CallButton) -> usize {
+pub fn time_to_idle(ref mut elev_info: ElevatorInfo, ref button: poll::CallButton) -> usize {
     // Dummy timers needed to "disconnect" the elevator from its current channel
     let (dummy_hw_tx, dummy_hw_rx) = cbc::unbounded::<elev::HardwareCommand>();
     let (dummy_timer_tx, dummy_timer_rx) = cbc::unbounded::<TimerCommand>();
-    let mut elev = fsm.get_simulation_elevator(dummy_hw_tx, dummy_timer_tx);
+
+    let mut elev = create_simulation_elevator(*elev_info, dummy_hw_tx, dummy_timer_tx);
     let mut duration: usize = 0;
 
     elev.on_event(Event::OnNewOrder { btn: button });

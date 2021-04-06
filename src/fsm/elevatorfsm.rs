@@ -9,6 +9,15 @@ use crate::fsm::door_timer::TimerCommand;
 
 use crossbeam_channel as cbc;
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ElevatorInfo {
+    id: String,
+    state: State,
+    dirn: u8,
+    floor: u8,
+    responsible_orders: order_list::OrderList,
+}
+
 /// Contains all we need to know about our elevator.
 /// * `hw_tx` the transmitter for sending hardware commands
 /// * `state` what the elevator is currently doing
@@ -19,15 +28,11 @@ use crossbeam_channel as cbc;
 pub struct Elevator {
     hw_tx: crossbeam_channel::Sender<elevio::HardwareCommand>,
     timer_start_tx: cbc::Sender<TimerCommand>,
-    info: ElevatorInfo /*
-    state: State,
-    dirn: u8,
-    floor: u8,
-    orders: order_list::OrderList,*/
+    info: ElevatorInfo
 }
 /** TODO: Refactor state, dirn, floor, orders */
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum State {
     Initializing,
     DoorOpen,
@@ -50,8 +55,9 @@ pub const DOOR_OPEN_TIME: u64 = 3;
 impl Elevator {
     pub fn new(
         n_floors: u8,
+        id: String,
         hw_commander: cbc::Sender<elevio::HardwareCommand>,
-        timer_start_tx: cbc::Sender<TimerCommand>,
+        timer_start_tx: cbc::Sender<TimerCommand>
     ) -> Elevator {
         hw_commander
             .send(elevio::HardwareCommand::MotorDirection {
@@ -64,10 +70,14 @@ impl Elevator {
         return Elevator {
             hw_tx: hw_commander,
             timer_start_tx: timer_start_tx,
-            state: State::Initializing,
-            dirn: elevio::DIRN_DOWN,
-            floor: u8::MAX,
-            orders: order_list::OrderList::new(n_floors),
+            info: ElevatorInfo{
+                id: id.clone(),
+                state: State::Initializing,
+                dirn: elevio::DIRN_DOWN,
+                floor: u8::MAX,
+                responsible_orders: order_list::OrderList::new(n_floors),
+            }
+            
         };
     }
     /// Takes the elevator fsm from one state to the next and sends the appropriate hardware commands on the hardware channel
@@ -83,30 +93,19 @@ impl Elevator {
     }
 
     pub fn get_floor(&self) -> u8 {
-        return self.floor;
+        return self.info.clone().floor;
     }
     pub fn get_state(&self) -> State {
-        return self.state.clone();
+        return self.info.clone().state.clone();
     }
     pub fn get_dirn(&self) -> u8 {
-        return self.dirn;
+        return self.info.clone().dirn;
     }
     pub fn get_hw_tx_handle(&self) -> cbc::Sender<elevio::HardwareCommand> {
         return self.hw_tx.clone();
     }
     pub fn get_orders(&self) -> order_list::OrderList {
-        return self.orders.clone();
-    }
-
-    pub fn get_simulation_elevator(
-        &self,
-        dummy_hw_tx: cbc::Sender<elevio::HardwareCommand>,
-        dummy_timer_start_tx: cbc::Sender<TimerCommand>,
-    ) -> Elevator {
-        let mut elev = self.clone();
-        elev.hw_tx = dummy_hw_tx;
-        elev.timer_start_tx = dummy_timer_start_tx;
-        return elev;
+        return self.info.clone().responsible_orders.clone();
     }
 
     fn on_door_time_out(&mut self) {
@@ -118,7 +117,7 @@ impl Elevator {
                     .send(elevio::HardwareCommand::DoorLight { on: false })
                     .unwrap();
                 clear_all_order_lights_on_floor(&hw_tx, self.get_floor());
-                self.orders.clear_orders_on_floor(self.get_floor());
+                self.info.responsible_orders.clear_orders_on_floor(self.get_floor());
                 let new_dirn: u8 = local_order_manager::choose_direction(self);
                 hw_tx
                     .send(elevio::HardwareCommand::MotorDirection { dirn: new_dirn })
@@ -258,7 +257,16 @@ fn clear_all_order_lights_on_floor(
     }
 }
 
-fn notify_peer_info() { /* Some logic for sending a message that PeerInfo uses to update its info on the local elevator? */
+pub fn create_simulation_elevator(
+    elev_info: ElevatorInfo,
+    dummy_hw_tx: cbc::Sender<elevio::HardwareCommand>,
+    dummy_timer_start_tx: cbc::Sender<TimerCommand>,
+) -> Elevator {
+    return Elevator {
+        hw_tx: dummy_hw_tx,
+        timer_start_tx: dummy_timer_start_tx,
+        info: elev_info.clone()
+    };
 }
 
 #[cfg(test)]
