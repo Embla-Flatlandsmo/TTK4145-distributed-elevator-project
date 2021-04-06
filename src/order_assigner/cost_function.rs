@@ -1,8 +1,6 @@
 use crate::elevio::{elev, poll};
 use crate::fsm::door_timer::TimerCommand;
 use crate::fsm::elevatorfsm::*;
-use crate::network::elevator_info;
-use crate::order_manager::local_order_manager;
 use crossbeam_channel as cbc;
 
 pub const TRAVEL_TIME: u64 = 2;
@@ -15,13 +13,12 @@ pub const TRAVEL_TIME: u64 = 2;
 /// `button` - Button corresponding to order we want to add.
 pub fn time_to_idle(ref mut elev_info: ElevatorInfo, ref button: poll::CallButton) -> usize {
     // Dummy timers needed to "disconnect" the elevator from its current channel
-    let (dummy_hw_tx, dummy_hw_rx) = cbc::unbounded::<elev::HardwareCommand>();
-    let (dummy_timer_tx, dummy_timer_rx) = cbc::unbounded::<TimerCommand>();
+    let (dummy_hw_tx, _dummy_hw_rx) = cbc::unbounded::<elev::HardwareCommand>();
+    let (dummy_timer_tx, _dummy_timer_rx) = cbc::unbounded::<TimerCommand>();
 
-    let mut elev = create_simulation_elevator(*elev_info, dummy_hw_tx, dummy_timer_tx);
+    let mut elev = Elevator::create_simulation_elevator(elev_info.clone(), dummy_hw_tx, dummy_timer_tx);
+    elev.on_event(Event::OnNewOrder{btn: *button});
     let mut duration: usize = 0;
-
-    elev.on_event(Event::OnNewOrder { btn: button });
 
     while elev.get_state() != State::Idle {
         duration += simulate_next_step(&mut elev);
@@ -58,6 +55,7 @@ fn simulate_next_step(fsm: &mut Elevator) -> usize {
 
 #[cfg(test)]
 mod test {
+    #![allow(unused_variables, unused_mut)]
     use super::*;
     use crate::fsm::door_timer::TimerCommand;
     use crossbeam_channel as cbc;
@@ -67,7 +65,8 @@ mod test {
         hardware_command_tx: cbc::Sender<elev::HardwareCommand>,
         door_timer_start_tx: cbc::Sender<TimerCommand>,
     ) -> Elevator {
-        let mut elevator = Elevator::new(num_floors, hardware_command_tx, door_timer_start_tx);
+        let id: String = "Elestator".to_string();
+        let mut elevator = Elevator::new(num_floors, id, hardware_command_tx, door_timer_start_tx);
         elevator.on_event(Event::OnFloorArrival {
             floor: arriving_floor,
         });
@@ -90,7 +89,7 @@ mod test {
         let elevator_backup = elevator.clone();
 
         let new_button = poll::CallButton { floor: 2, call: 1 };
-        let cost = time_to_idle(&elevator, new_button);
+        let cost = time_to_idle(elevator.get_info(), new_button);
         let mut is_different = false;
 
         if elevator.get_state() != elevator_backup.get_state() {
@@ -123,7 +122,7 @@ mod test {
         let elevator_backup = elevator.clone();
 
         let new_button = poll::CallButton { floor: 2, call: 1 };
-        let cost = time_to_idle(&elevator, new_button);
+        let cost = time_to_idle(elevator.get_info(), new_button);
         let mut is_different = false;
 
         assert_eq!(
@@ -151,8 +150,8 @@ mod test {
 
         let new_order = poll::CallButton { floor: 4, call: 1 };
 
-        let cost_idle = time_to_idle(&idle_elevator, new_order);
-        let cost_moving = time_to_idle(&moving_elevator, new_order);
+        let cost_idle = time_to_idle(idle_elevator.get_info(), new_order);
+        let cost_moving = time_to_idle(moving_elevator.get_info(), new_order);
 
         assert!(cost_idle < cost_moving);
     }

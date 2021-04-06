@@ -135,7 +135,7 @@ fn main() -> std::io::Result<()> {
     }
 
     let mut fsm =
-        fsm::elevatorfsm::Elevator::new(elev_num_floors, hardware_command_tx, door_timer_start_tx);
+        fsm::elevatorfsm::Elevator::new(elev_num_floors, id.clone(), hardware_command_tx, door_timer_start_tx);
 
     /* Initialization of hardware polling */
     let poll_period = time::Duration::from_millis(25);
@@ -202,7 +202,7 @@ fn main() -> std::io::Result<()> {
                 fsm.on_event(Event::OnDoorTimeOut);
             },
             recv(elevator_info_timeout_rx) -> a => {
-                global_elevator_info.on_orders_timed_out(a.unwrap());
+                // global_elevator_info.on_orders_timed_out(a.unwrap());
             }
         }
     }

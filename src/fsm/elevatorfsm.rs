@@ -92,20 +92,33 @@ impl Elevator {
         }
     }
 
+    pub fn create_simulation_elevator(info: ElevatorInfo, 
+        hw_commander: cbc::Sender<elevio::HardwareCommand>,
+        timer_start_tx: cbc::Sender<TimerCommand>) -> Elevator {
+            return Elevator {
+                hw_tx: hw_commander,
+                timer_start_tx: timer_start_tx,
+                info: info.clone()
+            }
+        }
+
+    pub fn get_info(&self) -> ElevatorInfo {
+        return self.info.clone();
+    }
     pub fn get_floor(&self) -> u8 {
-        return self.info.clone().floor;
+        return self.get_info().floor;
     }
     pub fn get_state(&self) -> State {
-        return self.info.clone().state.clone();
+        return self.get_info().state;
     }
     pub fn get_dirn(&self) -> u8 {
-        return self.info.clone().dirn;
+        return self.get_info().dirn;
     }
     pub fn get_hw_tx_handle(&self) -> cbc::Sender<elevio::HardwareCommand> {
         return self.hw_tx.clone();
     }
     pub fn get_orders(&self) -> order_list::OrderList {
-        return self.info.clone().responsible_orders.clone();
+        return self.get_info().responsible_orders;
     }
 
     fn on_door_time_out(&mut self) {
@@ -123,10 +136,10 @@ impl Elevator {
                     .send(elevio::HardwareCommand::MotorDirection { dirn: new_dirn })
                     .unwrap();
                 if new_dirn == elevio::DIRN_STOP {
-                    self.state = State::Idle;
+                    self.info.state = State::Idle;
                 } else {
-                    self.dirn = new_dirn;
-                    self.state = State::Moving;
+                    self.info.dirn = new_dirn;
+                    self.info.state = State::Moving;
                 }
             }
             _ => panic!("Door timed out in state {:#?}", state),
@@ -135,7 +148,7 @@ impl Elevator {
 
     fn on_floor_arrival(&mut self, new_floor: u8) {
         let state = self.get_state();
-        self.floor = new_floor;
+        self.info.floor = new_floor;
         self.hw_tx
             .send(elevio::HardwareCommand::FloorLight { floor: new_floor })
             .unwrap();
@@ -150,11 +163,11 @@ impl Elevator {
                     self.hw_tx
                         .send(elevio::HardwareCommand::DoorLight { on: true })
                         .unwrap();
-                    self.state = State::DoorOpen;
+                    self.info.state = State::DoorOpen;
                     //Start timer
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
                 } else {
-                    self.floor = new_floor;
+                    self.info.floor = new_floor;
                 }
             }
             State::Initializing => {
@@ -163,7 +176,7 @@ impl Elevator {
                         dirn: elevio::DIRN_STOP,
                     })
                     .unwrap();
-                self.state = State::Idle;
+                self.info.state = State::Idle;
             }
             _ => {}
         }
@@ -183,25 +196,25 @@ impl Elevator {
                     //start timer
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
                 }
-                self.orders.add_order(btn);
+                self.info.responsible_orders.add_order(btn);
                 self.hw_tx
                     .send(turn_on_call_btn_light)
                     .unwrap();
             }
             State::Obstructed => {
-                self.orders.add_order(btn);
+                self.info.responsible_orders.add_order(btn);
                 self.hw_tx
                     .send(turn_on_call_btn_light)
                     .unwrap();
             }
             State::Moving => {
-                self.orders.add_order(btn);
+                self.info.responsible_orders.add_order(btn);
                 self.hw_tx
                     .send(turn_on_call_btn_light)
                     .unwrap();
             }
             State::Idle => {
-                self.orders.add_order(btn);
+                self.info.responsible_orders.add_order(btn);
                 self.hw_tx
                 .send(turn_on_call_btn_light)
                 .unwrap();
@@ -210,14 +223,14 @@ impl Elevator {
                         .send(elevio::HardwareCommand::DoorLight { on: true })
                         .unwrap();
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
-                    self.state = State::DoorOpen;
+                    self.info.state = State::DoorOpen;
                 } else {
                     let new_dirn: u8 = local_order_manager::choose_direction(self);
                     self.hw_tx
                         .send(elevio::HardwareCommand::MotorDirection { dirn: new_dirn })
                         .unwrap();
-                    self.state = State::Moving;
-                    self.dirn = new_dirn;
+                    self.info.state = State::Moving;
+                    self.info.dirn = new_dirn;
                 }
             }
             State::Initializing => {}
@@ -231,11 +244,11 @@ impl Elevator {
             match active {
                 true => {
                     self.timer_start_tx.send(TimerCommand::Cancel).unwrap();
-                    self.state = State::Obstructed
+                    self.info.state = State::Obstructed
                 }
                 false => {
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
-                    self.state = State::DoorOpen
+                    self.info.state = State::DoorOpen
                 }
             }
         }
@@ -278,7 +291,8 @@ mod test {
         hardware_command_tx: cbc::Sender<elevio::HardwareCommand>,
         door_timer_start_tx: cbc::Sender<TimerCommand>,
     ) -> Elevator {
-        let mut elevator = Elevator::new(num_floors, hardware_command_tx, door_timer_start_tx);
+        let id: String = "Elestator".to_string();
+        let mut elevator = Elevator::new(num_floors, id, hardware_command_tx, door_timer_start_tx);
         elevator.on_event(Event::OnFloorArrival {
             floor: arriving_floor,
         });
@@ -290,8 +304,7 @@ mod test {
         let (timer_tx, _timer_rx) = cbc::unbounded::<TimerCommand>();
         let elev_num_floors = 5;
 
-        let mut elevator = Elevator::new(elev_num_floors, hw_tx, timer_tx);
-        elevator.on_event(Event::OnFloorArrival { floor: 2 });
+        let elevator = initialize_elevator(elev_num_floors, 2, hw_tx, timer_tx);
         let elevator_state = elevator.get_state();
         assert!((elevator.get_floor() == 2) && (elevator_state == State::Idle));
     }
@@ -307,6 +320,7 @@ mod test {
         elevator.on_event(Event::OnNewOrder {
             btn: poll::CallButton { floor: 3, call: 2 },
         });
+        hw_rx.recv().unwrap();
         assert_eq!(
             hw_rx.recv(),
             Ok(elevio::HardwareCommand::DoorLight { on: true })
@@ -325,6 +339,8 @@ mod test {
             btn: poll::CallButton { floor: 4, call: 1 },
         });
 
+        hw_rx.recv().unwrap();
+        
         assert_eq!(
             hw_rx.recv(),
             Ok(elevio::HardwareCommand::MotorDirection {
@@ -344,6 +360,7 @@ mod test {
         elevator.on_event(Event::OnNewOrder {
             btn: poll::CallButton { floor: 0, call: 1 },
         });
+        hw_rx.recv().unwrap();
         assert_eq!(
             hw_rx.recv(),
             Ok(elevio::HardwareCommand::MotorDirection {

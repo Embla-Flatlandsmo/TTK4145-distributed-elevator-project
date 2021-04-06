@@ -2,9 +2,10 @@
 #![allow(dead_code)]
 use crate::elevio::poll as elevio;
 use std::vec::Vec;
+use serde;
 
 //TODO!!!!!!!
-struct OrderTypes {
+enum OrderTypes {
     Confirmed,
     Pending,
     None
@@ -70,9 +71,6 @@ impl OrderList {
     /// Removes a single order in the specified direction
     ///
     /// `button` - The button (containing `floor` and `call`) that corresponds to the order to be added
-    ///
-    /// #
-    ///
     ///
     pub fn add_order(&mut self, button: elevio::CallButton) {
         self.modify_order(button, true);
