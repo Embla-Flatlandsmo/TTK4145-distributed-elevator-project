@@ -51,7 +51,11 @@ pub enum Event {
 }
 
 pub const DOOR_OPEN_TIME: u64 = 3;
-
+impl ElevatorInfo {
+    pub fn get_id(&self) -> String {
+        return self.clone().id;
+    }
+}
 impl Elevator {
     pub fn new(
         n_floors: u8,
