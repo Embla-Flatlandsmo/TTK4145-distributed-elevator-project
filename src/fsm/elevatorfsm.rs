@@ -9,13 +9,13 @@ use crate::fsm::door_timer::TimerCommand;
 
 use crossbeam_channel as cbc;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
 pub struct ElevatorInfo {
-    id: String,
-    state: State,
-    dirn: u8,
-    floor: u8,
-    responsible_orders: order_list::OrderList,
+    pub id: String,
+    pub state: State,
+    pub dirn: u8,
+    pub floor: u8,
+    pub responsible_orders: order_list::OrderList,
 }
 
 /// Contains all we need to know about our elevator.
@@ -32,7 +32,7 @@ pub struct Elevator {
 }
 /** TODO: Refactor state, dirn, floor, orders */
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, Hash)]
 pub enum State {
     Initializing,
     DoorOpen,
@@ -51,7 +51,11 @@ pub enum Event {
 }
 
 pub const DOOR_OPEN_TIME: u64 = 3;
-
+impl ElevatorInfo {
+    pub fn get_id(&self) -> String {
+        return self.clone().id;
+    }
+}
 impl Elevator {
     pub fn new(
         n_floors: u8,

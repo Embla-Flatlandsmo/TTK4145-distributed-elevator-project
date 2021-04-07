@@ -1,5 +1,9 @@
-use crate::remote_elevator::RemoteElevatorUpdate;
+use crate::network::remote_elevator::RemoteElevatorUpdate;
 use crate::elevio::poll::CallButton;
+use crate::fsm::elevatorfsm::ElevatorInfo;
+use crate::order_assigner::cost_function;
+use std::collections::HashMap;
+
 pub struct GlobalElevatorInfo {
     is_online: bool,
     local_elevator: ElevatorInfo,
@@ -10,20 +14,20 @@ impl GlobalElevatorInfo {
     pub fn new(ref mut local_elev: ElevatorInfo) -> GlobalElevatorInfo {
         GlobalElevatorInfo {
             is_online: true,
-            local_elevator: local_elev,
-            remote_elevators: Vec::new(),
+            local_elevator: local_elev.clone(),
+            remote_elevators: HashMap::new(),
         }
         }
     pub fn find_lowest_cost_id(&self, btn: CallButton) -> String {
         if self.is_online {
-            return self.local_elevator.clone().id.clone();
+            return self.local_elevator.clone().get_id();
         }
-        let mut lowest_cost_id: String = self.local_elevator.id.clone();
+        let mut lowest_cost_id: String = self.local_elevator.clone().get_id();
         let mut lowest_cost: usize = cost_function::time_to_idle(self.local_elevator, btn);
-        for elev in remote_elevators.iter() {
-            let elev_cost = cost_function::time_to_idle(elev);
+        for (id, elevinfo) in self.remote_elevators.iter() {
+            let elev_cost = cost_function::time_to_idle(elevinfo.clone(), btn);
             if elev_cost < lowest_cost {
-                lowest_cost_id = elev.clone().id.clone();
+                lowest_cost_id = id.clone();
                 lowest_cost = elev_cost;
             }
         }
@@ -36,7 +40,7 @@ impl GlobalElevatorInfo {
         }
 
         for lost_elev in remote_update.clone().lost.iter() {
-            remote_elevators.remove(lost_elev.id)
+            self.remote_elevators.remove(lost_elev.id);
         }
 
 
