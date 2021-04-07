@@ -34,19 +34,24 @@ impl GlobalElevatorInfo {
         return lowest_cost_id;
     }
 
-    pub fn update_remote_elevator_info(&mut self, remote_update: RemoteElevatorUpdate) {
-        for update in remote_update.clone().peers.iter() {
-            
-        }
+    pub fn update_remote_elevator_info(&mut self, remote_update: HashMap<String, ElevatorInfo>) {
+        //TODO: Don't overwrite here...
+        self.remote_elevators = remote_update;
+    }
 
-        for lost_elev in remote_update.clone().lost.iter() {
-            self.remote_elevators.remove(lost_elev.id);
-        }
+    pub fn update_local_elevator_info(&mut self, local_update: ElevatorInfo) {
+        self.local_elevator = local_update;
+    }
 
+    pub fn set_to_pending(&mut self, id: &String, button: CallButton) {
+        let mut elev_info: ElevatorInfo = *(self.remote_elevators.get(id).unwrap());
+        elev_info.responsible_orders.set_pending(button);
+        self.remote_elevators.insert(*id, elev_info);
+    }
 
-        if remote_update.clone().new != None {
-
-        }
-
+    pub fn is_pending(mut self, id: &str, button: CallButton) -> bool{
+        let elev_info: ElevatorInfo = *(self.remote_elevators.get(id).unwrap());
+        return elev_info.responsible_orders.is_pending(button)
     }
 }
+

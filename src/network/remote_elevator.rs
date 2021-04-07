@@ -97,7 +97,7 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Send
 
         // Sending remote elevator update
         if modified {
-            e.peers = elev_info.keys().cloned().collect();
+            //e.peers = elev_info.keys().cloned().collect();
             elev_info_update.send(e).unwrap();
         }
     }

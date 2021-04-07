@@ -4,7 +4,7 @@ use crate::elevio::poll as elevio;
 use serde;
 use std::vec::Vec;
 
-#[derive(PartialEq, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Copy, Clone, Debug, serde::Serialize, serde::Deserialize, Hash)]
 pub enum OrderType {
     Active,
     Pending,
