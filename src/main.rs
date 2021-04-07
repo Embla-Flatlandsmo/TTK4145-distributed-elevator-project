@@ -67,6 +67,7 @@ fn main() -> std::io::Result<()> {
     spawn(move || {
         network::peers::rx(peer_port, peer_update_tx);
     });
+    
     // Periodically produce a custom data message
     let (custom_data_send_tx, custom_data_send_rx) = cbc::unbounded::<CustomDataType>();
     {

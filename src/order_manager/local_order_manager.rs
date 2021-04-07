@@ -1,4 +1,5 @@
 use super::order_list;
+use super::order_list::OrderType;
 use crate::elevio::elev::{DIRN_DOWN, DIRN_STOP, DIRN_UP};
 use crate::fsm::elevatorfsm;
 
@@ -27,12 +28,11 @@ pub fn choose_direction(fsm: &mut elevatorfsm::Elevator) -> u8 {
                 return DIRN_STOP;
             }
         }
-        /*
         DIRN_STOP => {
             if orders_below {return DIRN_DOWN;}
             else if orders_above {return DIRN_UP;}
             else {return DIRN_STOP;}
-        },*/
+        },
         _ => DIRN_STOP,
     }
 }
@@ -44,16 +44,16 @@ pub fn should_stop(fsm: &mut elevatorfsm::Elevator) -> bool {
     match dirn {
         DIRN_DOWN => {
             return {
-                order_list.down_queue[floor]
-                    || order_list.inside_queue[floor]
-                    || !order_below(&order_list, floor)
+                order_list.down_queue[floor] == OrderType::Active ||
+                order_list.inside_queue[floor] == OrderType::Active ||
+                !order_below(&order_list, floor)
             }
         }
         DIRN_UP => {
             return {
-                order_list.up_queue[floor]
-                    || order_list.inside_queue[floor]
-                    || !order_above(&order_list, floor)
+                order_list.up_queue[floor] == OrderType::Active ||
+                order_list.inside_queue[floor] == OrderType::Active ||
+                !order_above(&order_list, floor)
             }
         }
         _ => true,
@@ -80,18 +80,18 @@ fn order_above(order_list: &order_list::OrderList, floor: usize) -> bool {
         || single_queue_order_above(inside_queue, floor);
 }
 
-fn single_queue_order_below(queue: &[bool], floor: usize) -> bool {
+fn single_queue_order_below(queue: &[OrderType], floor: usize) -> bool {
     for &order in queue.iter().take(floor) {
-        if order {
+        if order == OrderType::Active{
             return true;
         }
     }
     return false;
 }
 
-fn single_queue_order_above(queue: &[bool], floor: usize) -> bool {
+fn single_queue_order_above(queue: &[OrderType], floor: usize) -> bool {
     for &order in queue.iter().skip(floor + 1) {
-        if order {
+        if order == OrderType::Active {
             return true;
         }
     }
