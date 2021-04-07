@@ -1,3 +1,12 @@
+use crossbeam_channel as cbc;
+use serde;
+use crate::fsm::elevatorfsm::ElevatorInfo;
+use crate::fsm::elevatorfsm::Elevator;
+use std::time;
+use std::collections::HashMap;
+#[path = "./sock.rs"]
+mod sock;
+
 #[derive(Debug)]
 pub struct RemoteElevatorUpdate {
     pub peers:  Vec<ElevatorInfo>,
@@ -22,7 +31,7 @@ pub fn tx<T: serde::Serialize>(port: u16, ref mut elev: Elevator, tx_enable: cbc
             },
             recv(ticker) -> _ => {
                 if enabled {
-                    let data = elev.info;
+                    let data = elev.get_info();
                     let serialized = serde_json::to_string(&data).unwrap();
                     let res = s.send(serialized.as_bytes());
                     match res {
@@ -42,7 +51,7 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Send
     
     let mut last_seen: HashMap<String, time::Instant> = HashMap::new();
     /// Maps ID to its corresponding elevator info
-    let mut el  ev_info: HashMap<String, ElevatorInfo> = HashMap::new();
+    let mut elev_info: HashMap<String, ElevatorInfo> = HashMap::new();
     let mut buf = [0; 1024];
 
     loop {

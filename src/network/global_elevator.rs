@@ -1,5 +1,6 @@
-use crate::remote_elevator::RemoteElevatorUpdate;
+use crate::network::remote_elevator::RemoteElevatorUpdate;
 use crate::elevio::poll::CallButton;
+
 pub struct GlobalElevatorInfo {
     is_online: bool,
     local_elevator: ElevatorInfo,
