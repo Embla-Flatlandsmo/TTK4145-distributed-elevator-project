@@ -62,7 +62,6 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Send
 
         let r = s.recv(&mut buf);
         let now = time::Instant::now();
-
         // Find new peers transmitting elevator info
         match r {
             Ok(n) => {
@@ -84,7 +83,7 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Send
         // Finding lost peers
         for (id, when) in &last_seen {
             if now - *when > timeout {
-                e.lost.push(*elev_info.get(id).unwrap());
+                //e.lost.push(*elev_info.get(id).unwrap());
                 modified = true;
             }
         }
@@ -102,3 +101,4 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Send
         }
     }
 }
+

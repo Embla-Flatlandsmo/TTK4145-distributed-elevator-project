@@ -11,6 +11,7 @@ use serde;
 use elevio::elev as e;
 use fsm::door_timer;
 use fsm::elevatorfsm::Event;
+use network::global_elevator::GlobalElevatorInfo;
 
 // Data types to be sent on the network must derive traits for serialization
 
@@ -138,7 +139,7 @@ fn main() -> std::io::Result<()> {
     let mut fsm =
         fsm::elevatorfsm::Elevator::new(elev_num_floors, id.clone(), hardware_command_tx, door_timer_start_tx);
 
-    let mut global_elevator_info = GlobalE
+    let mut global_elevator_info = GlobalElevatorInfo::new(fsm.get_info());
     /* Initialization of hardware polling */
     let poll_period = time::Duration::from_millis(25);
     let (call_button_tx, call_button_rx) = cbc::unbounded::<elevio::poll::CallButton>();

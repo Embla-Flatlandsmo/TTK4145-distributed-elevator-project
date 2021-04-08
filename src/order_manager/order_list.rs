@@ -11,6 +11,21 @@ pub enum OrderType {
     None,
 }
 
+/// Merges remote order into current order. It prioritizes remote order.
+/// A pending order can only be upgraded to active by `remote_order`.
+fn merge_remote_order(current_order: OrderType, remote_order: OrderType) -> OrderType {
+    match current_order {
+        OrderType::Pending => {
+            if remote_order == OrderType::Active {
+                return remote_order;
+            } else {
+                return OrderType::Pending;
+            }
+        },
+        _ => remote_order,
+    }
+}
+
 /// Utility struct for managing local or global orders
 ///
 /// # Example
@@ -75,20 +90,38 @@ impl OrderList {
     pub fn add_order(&mut self, button: elevio::CallButton) {
         self.modify_order(button, OrderType::Active);
     }
+    /// Sets the order corresponding to button to pending. 
+    /// 
+    /// **Note**: If the order is already active, the order will not be set to pending but remain active.
     pub fn set_pending(&mut self, button: elevio::CallButton) {
-        self.modify_order(button, OrderType::Pending);
+        if self.get_order_status(button) != OrderType::Active {
+            self.modify_order(button, OrderType::Pending);
+        }
     }
     /// Says if the order is pending
     ///
     /// * `button` - The button (containing `floor` and `call`) that corresponds to the order to be checked
-    pub fn is_pending(mut self, button: elevio::CallButton) -> bool {
+    pub fn is_pending(&self, button: elevio::CallButton) -> bool {
         return self.get_order_status(button) == OrderType::Pending;
     }
 
-    /// Sets both Active and Pending orders of `orders` to Active in its own list
+    /// Updates the order list with the values of a remote order
+    pub fn merge_remote_orders(&mut self, remote_orders: OrderList) {
+        if self.n_floors != remote_orders.n_floors {
+            panic!("Tried to merge elevator orders of different lengths :(")
+        }
+    
+        for i in 0..=self.n_floors - 1 {
+            self.up_queue[i] = merge_remote_order(self.up_queue[i], remote_orders.up_queue[i]);
+            self.down_queue[i] = merge_remote_order(self.down_queue[i], remote_orders.down_queue[i]);
+            self.inside_queue[i] = merge_remote_order(self.inside_queue[i], remote_orders.inside_queue[i]);
+        }
+    }
+
+    /// Sets both Active and Pending hall orders of `orders` to Active in its own list.
     ///
     /// * `orders` - OrderList to merge
-    pub fn merge_hall_orders(&mut self, orders: OrderList) {
+    pub fn service_hall_orders(&mut self, orders: OrderList) {
         if self.n_floors != orders.n_floors {
             panic!("Tried to merge elevator orders of different lengths :(")
         }
@@ -98,18 +131,18 @@ impl OrderList {
                 || orders.up_queue[i] == OrderType::Active
                 || orders.up_queue[i] == OrderType::Pending
             {
-                self.up_queue[i] == OrderType::Active;
+                self.up_queue[i] = OrderType::Active;
             }
             if self.down_queue[i] == OrderType::Active
                 || orders.down_queue[i] == OrderType::Active
                 || orders.down_queue[i] == OrderType::Pending
             {
-                self.down_queue[i] == OrderType::Active;
+                self.down_queue[i] = OrderType::Active;
             }
         }
     }
 
-    fn get_order_status(mut self, button: elevio::CallButton) -> OrderType {
+    fn get_order_status(&self, button: elevio::CallButton) -> OrderType {
         match button.call {
             0 => self.up_queue[usize::from(button.floor)],
             1 => self.down_queue[usize::from(button.floor)],
@@ -175,8 +208,56 @@ mod test {
         let reference_order_list = OrderList::new(5);
         assert!((order_list == reference_order_list));
     }
-
+    #[test]
     fn it_correctly_detects_pending_order() {
-        assert!(true);
+        let mut order_list = OrderList::new(5);
+        order_list.set_pending(CallButton { floor: 4, call: 0 });
+        assert!(order_list.is_pending(CallButton { floor: 4, call: 0 }));
+    }
+
+    #[test]
+    fn it_correctly_merges_remote_order_list() {
+        let mut order_list = OrderList::new(5);
+        order_list.set_pending(CallButton { floor: 4, call: 0 });
+        order_list.set_pending(CallButton { floor: 3, call: 2 });
+        order_list.add_order(CallButton { floor: 0, call: 2 });
+
+        // Check: Is merging the lists the same as adding orders?
+        let mut order_list_to_compare = order_list.clone();
+        order_list_to_compare.add_order(CallButton{floor: 1, call: 0});
+        order_list_to_compare.add_order(CallButton{floor: 0, call: 2});
+
+        let mut order_list_update = OrderList::new(5);
+        order_list_update.add_order(CallButton{floor: 1, call: 0});
+        order_list_update.add_order(CallButton{floor: 0, call: 2});
+
+        order_list.merge_remote_orders(order_list_update);
+        assert_eq!(order_list, order_list_to_compare);
+    }
+
+    #[test]
+    fn it_correctly_services_hall_orders() {
+        let mut local_order_list = OrderList::new(5);
+        local_order_list.add_order(CallButton { floor: 4, call: 0 });
+        local_order_list.add_order(CallButton { floor: 0, call: 2 });
+        local_order_list.add_order(CallButton { floor: 2, call: 0 });
+
+        let mut correct_order_list = OrderList::new(5);
+        correct_order_list.add_order(CallButton { floor: 4, call: 0 });
+        correct_order_list.add_order(CallButton { floor: 0, call: 2 });
+        correct_order_list.add_order(CallButton { floor: 2, call: 0 });
+        correct_order_list.add_order(CallButton { floor: 4, call: 0 });
+        correct_order_list.add_order(CallButton { floor: 2, call: 1 });
+        correct_order_list.add_order(CallButton { floor: 0, call: 1 });
+
+        let mut timed_out_order_list = OrderList::new(5);
+        timed_out_order_list.set_pending(CallButton { floor: 4, call: 0 });
+        timed_out_order_list.set_pending(CallButton { floor: 2, call: 1 });
+        timed_out_order_list.set_pending(CallButton { floor: 3, call: 2 });
+        timed_out_order_list.add_order(CallButton { floor: 0, call: 1 });
+
+        local_order_list.service_hall_orders(timed_out_order_list);
+
+        assert_eq!(local_order_list, correct_order_list);
     }
 }
