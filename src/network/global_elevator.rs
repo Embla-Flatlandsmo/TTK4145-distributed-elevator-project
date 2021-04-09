@@ -18,11 +18,11 @@ impl GlobalElevatorInfo {
             remote_elevators: HashMap::new(),
         }
         }
-    pub fn find_lowest_cost_id(&self, btn: CallButton) -> String {
+    pub fn find_lowest_cost_id(&self, btn: CallButton) -> usize {
         if self.is_online {
             return self.local_elevator.clone().get_id();
         }
-        let mut lowest_cost_id: String = self.local_elevator.clone().get_id();
+        let mut lowest_cost_id: usize = self.local_elevator.clone().get_id();
         let mut lowest_cost: usize = cost_function::time_to_idle(self.local_elevator.clone(), btn);
         for (id, elevinfo) in self.remote_elevators.iter() {
             let elev_cost = cost_function::time_to_idle(elevinfo.clone(), btn);
@@ -35,7 +35,7 @@ impl GlobalElevatorInfo {
     }
 
     pub fn update_remote_elevator_info(&mut self, remote_update: HashMap<String, ElevatorInfo>) {
-        let mut latest_elevator_update: HashMap<String, ElevatorInfo> = HashMap::new();
+        let mut latest_elevator_update: HashMap<usize, ElevatorInfo> = HashMap::new();
         for (id, remote_info) in remote_update {
             let mut current_info: ElevatorInfo;
             if self.remote_elevators.contains_key(&id) {

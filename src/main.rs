@@ -11,7 +11,8 @@ use serde;
 use elevio::elev as e;
 use fsm::door_timer;
 use fsm::elevatorfsm::Event;
-use network::global_elevator::GlobalElevatorInfo;
+//use network::global_elevator::GlobalElevatorInfo;
+use crate::fsm::elevatorfsm::ElevatorInfo;
 
 // Data types to be sent on the network must derive traits for serialization
 
@@ -29,11 +30,12 @@ struct CustomDataType {
 }
 
 pub const DOOR_OPEN_TIME: u64 = 3;
+pub const ID: usize = 1;
 
 fn main() -> std::io::Result<()> {
     /* ------------------NETWORK----------------- */
     // Genreate id: either from command line, or a default rust@ip#pid
-    let args: Vec<String> = env::args().collect();
+    /*let args: Vec<String> = env::args().collect();
     let id = if args.len() > 1 {
         args[1].clone()
     } else {
@@ -43,62 +45,11 @@ fn main() -> std::io::Result<()> {
             .unwrap()
             .ip();
         format!("rust@{}#{}", local_ip, process::id())
-    };
+    };*/
 
     let msg_port = 19747;
     let peer_port = 19738;
 
-    // The sender for peer discovery
-    let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
-    {
-        let id = id.clone();
-        spawn(move || {
-            network::peers::tx(peer_port, id, peer_tx_enable_rx);
-        });
-    }
-    // (periodically disable/enable the peer broadcast, to provoke new peer / peer loss messages)
-    spawn(move || loop {
-        sleep(time::Duration::new(6, 0));
-        peer_tx_enable_tx.send(false).unwrap();
-        sleep(time::Duration::new(3, 0));
-        peer_tx_enable_tx.send(true).unwrap();
-    });
-    // The receiver for peer discovery updates
-    let (peer_update_tx, peer_update_rx) = cbc::unbounded::<network::peers::PeerUpdate>();
-    spawn(move || {
-        network::peers::rx(peer_port, peer_update_tx);
-    });
-    
-    // Periodically produce a custom data message
-    let (custom_data_send_tx, custom_data_send_rx) = cbc::unbounded::<CustomDataType>();
-    {
-        let id = id.clone();
-        spawn(move || {
-            let new_order = order_t {
-                node: "192.168.1.1".to_string(),
-                floor: 2,
-            };
-            let mut cd = CustomDataType {
-                message: format!("Hello from node {}", id),
-                order: new_order,
-                iteration: 0,
-            };
-            loop {
-                custom_data_send_tx.send(cd.clone()).unwrap();
-                cd.iteration += 1;
-                sleep(time::Duration::new(1, 0));
-            }
-        });
-    }
-    // The sender for our custom data
-    spawn(move || {
-        network::bcast::tx(msg_port, custom_data_send_rx);
-    });
-    // The receiver for our custom data
-    let (custom_data_recv_tx, custom_data_recv_rx) = cbc::unbounded::<CustomDataType>();
-    spawn(move || {
-        network::bcast::rx(msg_port, custom_data_recv_tx);
-    });
 
     /*----------------SINGLE ELEVATOR---------------------*/
     let elev_num_floors = 4;
@@ -137,9 +88,9 @@ fn main() -> std::io::Result<()> {
     }
 
     let mut fsm =
-        fsm::elevatorfsm::Elevator::new(elev_num_floors, id.clone(), hardware_command_tx, door_timer_start_tx);
+        fsm::elevatorfsm::Elevator::new(elev_num_floors, ID, hardware_command_tx, door_timer_start_tx);
 
-    let mut global_elevator_info = GlobalElevatorInfo::new(fsm.get_info());
+    //let mut global_elevator_info = GlobalElevatorInfo::new(fsm.get_info());
     /* Initialization of hardware polling */
     let poll_period = time::Duration::from_millis(25);
     let (call_button_tx, call_button_rx) = cbc::unbounded::<elevio::poll::CallButton>();
@@ -170,6 +121,59 @@ fn main() -> std::io::Result<()> {
     {
         
     }
+
+    /*----------------METWWORK---------------------*/
+    // The sender for peer discovery
+    let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
+    {
+        //let id = id.clone();
+        spawn(move || {
+            network::remote_elevator::tx::<ElevatorInfo>(peer_port, fsm, peer_tx_enable_rx);
+        });
+    }
+    // (periodically disable/enable the peer broadcast, to provoke new peer / peer loss messages)
+    spawn(move || loop {
+        sleep(time::Duration::new(6, 0));
+        peer_tx_enable_tx.send(false).unwrap();
+        sleep(time::Duration::new(3, 0));
+        peer_tx_enable_tx.send(true).unwrap();
+    });
+    // The receiver for peer discovery updates
+    let (peer_update_tx, peer_update_rx) = cbc::unbounded::<Vec<ElevatorInfo>>();
+    spawn(move || {
+        network::remote_elevator::rx::<Vec<ElevatorInfo>>(peer_port, peer_update_tx);
+    });
+    
+    // Periodically produce a custom data message
+    let (custom_data_send_tx, custom_data_send_rx) = cbc::unbounded::<CustomDataType>();
+    {
+        //let id = id.clone();
+        spawn(move || {
+            let new_order = order_t {
+                node: "192.168.1.1".to_string(),
+                floor: 2,
+            };
+            let mut cd = CustomDataType {
+                message: format!("Hello from node {}", ID),
+                order: new_order,
+                iteration: 0,
+            };
+            loop {
+                custom_data_send_tx.send(cd.clone()).unwrap();
+                cd.iteration += 1;
+                sleep(time::Duration::new(1, 0));
+            }
+        });
+    }
+    // The sender for our custom data
+    spawn(move || {
+        network::bcast::tx(msg_port, custom_data_send_rx);
+    });
+    // The receiver for our custom data
+    let (custom_data_recv_tx, custom_data_recv_rx) = cbc::unbounded::<CustomDataType>();
+    spawn(move || {
+        network::bcast::rx(msg_port, custom_data_recv_tx);
+    });
 
     loop {
         cbc::select! {

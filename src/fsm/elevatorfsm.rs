@@ -11,7 +11,7 @@ use crossbeam_channel as cbc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
 pub struct ElevatorInfo {
-    pub id: String,
+    pub id: usize,
     pub state: State,
     pub dirn: u8,
     pub floor: u8,
@@ -52,14 +52,14 @@ pub enum Event {
 
 pub const DOOR_OPEN_TIME: u64 = 3;
 impl ElevatorInfo {
-    pub fn get_id(&self) -> String {
+    pub fn get_id(&self) -> usize {
         return self.clone().id;
     }
 }
 impl Elevator {
     pub fn new(
         n_floors: u8,
-        id: String,
+        id: usize,
         hw_commander: cbc::Sender<elevio::HardwareCommand>,
         timer_start_tx: cbc::Sender<TimerCommand>
     ) -> Elevator {

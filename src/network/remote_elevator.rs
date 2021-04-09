@@ -14,7 +14,7 @@ pub struct RemoteElevatorUpdate {
     pub lost:   Vec<ElevatorInfo>,
 }
 
-pub fn tx<T: serde::Serialize>(port: u16, ref mut elev: Elevator, tx_enable: cbc::Receiver<bool>){
+pub fn tx<ElevatorInfo: serde::Serialize>(port: u16, ref mut elev: Elevator, tx_enable: cbc::Receiver<bool>){
 
     let s = sock::new_tx(port).unwrap();
     
@@ -42,14 +42,15 @@ pub fn tx<T: serde::Serialize>(port: u16, ref mut elev: Elevator, tx_enable: cbc
     }
 }
 
-pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Sender::<RemoteElevatorUpdate>) {
+pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Sender::<Vec<ElevatorInfo>>) {
     let timeout = time::Duration::from_millis(500);
     let s = sock::new_rx(port).unwrap();
     s.set_read_timeout(Some(timeout)).unwrap();
     
-    let mut last_seen: HashMap<String, time::Instant> = HashMap::new();
-    /// Maps ID to its corresponding elevator info
-    let mut elev_info: HashMap<String, ElevatorInfo> = HashMap::new();
+    let mut last_seen: HashMap<usize, time::Instant> = HashMap::new();
+    let mut active_peers: HashMap<usize, ElevatorInfo> = HashMap::new();
+    let mut lost_peers: HashMap<usize, ElevatorInfo> = HashMap::new();
+
     let mut buf = [0; 1024];
 
     loop {
@@ -75,15 +76,25 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Send
                     None
                 };
                 last_seen.insert(id.clone(), now);
-                elev_info.insert(id.clone(), info.clone());
+                active_peers.insert(id.clone(), info.clone());
+                lost_peers.remove(&id.clone());
             }
             Err(_e) => {},
         }
 
+
+        // Send cab calls to reconnecting node
+        /*for id in e.new {
+            if e.lost.contains_key(id){
+                //broadcast_cab_calls_to_new_elevator(id);
+            }
+        }*/
+
         // Finding lost peers
-        for (id, when) in &last_seen {
-            if now - *when > timeout {
-                //e.lost.push(*elev_info.get(id).unwrap());
+        for (id, when_last_seen) in &last_seen {
+            if now.duration_since(*when_last_seen) > timeout {
+                e.lost.push(active_peers.get(id).unwrap().clone()); //what if node is not in elev_info_active?
+                lost_peers.insert(id.clone(), active_peers.get(&id).unwrap().clone());
                 modified = true;
             }
         }
@@ -91,14 +102,15 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Send
         // .. and removing them
         for elev in &e.lost {
             last_seen.remove(&elev.id.clone());
-            elev_info.remove(&elev.id.clone());
+            active_peers.remove(&elev.id.clone());
         }
 
         // Sending remote elevator update
         if modified {
-            //e.peers = elev_info.keys().cloned().collect();
-            elev_info_update.send(e).unwrap();
+            e.peers = active_peers.values().cloned().collect();
+            elev_info_update.send(e.peers.clone()).unwrap();
         }
     }
 }
+
 
