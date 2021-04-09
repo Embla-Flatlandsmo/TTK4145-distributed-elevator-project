@@ -137,9 +137,9 @@ fn main() -> std::io::Result<()> {
     }
 
     let mut fsm =
-        fsm::elevatorfsm::Elevator::new(elev_num_floors, id.clone(), hardware_command_tx, door_timer_start_tx);
+        fsm::elevatorfsm::Elevator::new(elev_num_floors, 0, hardware_command_tx, door_timer_start_tx);
 
-    let mut global_elevator_info = GlobalElevatorInfo::new(fsm.get_info());
+    let mut global_elevator_info = GlobalElevatorInfo::new(fsm.get_info(), 10);
     /* Initialization of hardware polling */
     let poll_period = time::Duration::from_millis(25);
     let (call_button_tx, call_button_rx) = cbc::unbounded::<elevio::poll::CallButton>();

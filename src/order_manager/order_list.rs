@@ -105,7 +105,7 @@ impl OrderList {
         return self.get_order_status(button) == OrderType::Pending;
     }
 
-    /// Updates the order list with the values of a remote order
+    /// Updates the order list with the values of a remote order, but preserves pending orders in the existing list
     pub fn merge_remote_orders(&mut self, remote_orders: OrderList) {
         if self.n_floors != remote_orders.n_floors {
             panic!("Tried to merge elevator orders of different lengths :(")

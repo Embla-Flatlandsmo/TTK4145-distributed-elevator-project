@@ -65,7 +65,7 @@ mod test {
         hardware_command_tx: cbc::Sender<elev::HardwareCommand>,
         door_timer_start_tx: cbc::Sender<TimerCommand>,
     ) -> Elevator {
-        let id: String = "Elestator".to_string();
+        let id: usize = 0;
         let mut elevator = Elevator::new(num_floors, id, hardware_command_tx, door_timer_start_tx);
         elevator.on_event(Event::OnFloorArrival {
             floor: arriving_floor,

@@ -11,7 +11,7 @@ use crossbeam_channel as cbc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
 pub struct ElevatorInfo {
-    pub id: String,
+    pub id: usize,
     pub state: State,
     pub dirn: u8,
     pub floor: u8,
@@ -32,7 +32,7 @@ pub struct Elevator {
 }
 /** TODO: Refactor state, dirn, floor, orders */
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, Hash)]
 pub enum State {
     Initializing,
     DoorOpen,
@@ -52,14 +52,14 @@ pub enum Event {
 
 pub const DOOR_OPEN_TIME: u64 = 3;
 impl ElevatorInfo {
-    pub fn get_id(&self) -> String {
-        return self.clone().id;
+    pub fn get_id(&self) -> usize {
+        return self.id;
     }
 }
 impl Elevator {
     pub fn new(
         n_floors: u8,
-        id: String,
+        id: usize,
         hw_commander: cbc::Sender<elevio::HardwareCommand>,
         timer_start_tx: cbc::Sender<TimerCommand>
     ) -> Elevator {
@@ -75,7 +75,7 @@ impl Elevator {
             hw_tx: hw_commander,
             timer_start_tx: timer_start_tx,
             info: ElevatorInfo{
-                id: id.clone(),
+                id: id,
                 state: State::Initializing,
                 dirn: elevio::DIRN_DOWN,
                 floor: u8::MAX,
@@ -295,7 +295,7 @@ mod test {
         hardware_command_tx: cbc::Sender<elevio::HardwareCommand>,
         door_timer_start_tx: cbc::Sender<TimerCommand>,
     ) -> Elevator {
-        let id: String = "Elestator".to_string();
+        let id: usize = 1;
         let mut elevator = Elevator::new(num_floors, id, hardware_command_tx, door_timer_start_tx);
         elevator.on_event(Event::OnFloorArrival {
             floor: arriving_floor,

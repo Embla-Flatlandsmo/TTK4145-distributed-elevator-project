@@ -2,7 +2,6 @@ pub mod network {
     pub mod bcast;
     pub mod peers;
     pub mod global_elevator;
-    pub mod remote_elevator;
 }
 
 pub mod elevio {
