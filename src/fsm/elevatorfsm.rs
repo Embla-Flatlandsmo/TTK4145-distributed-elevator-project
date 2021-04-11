@@ -200,25 +200,25 @@ impl Elevator {
                     //start timer
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
                 }
-                self.info.responsible_orders.add_order(btn);
+                self.info.responsible_orders.set_active(btn);
                 self.hw_tx
                     .send(turn_on_call_btn_light)
                     .unwrap();
             }
             State::Obstructed => {
-                self.info.responsible_orders.add_order(btn);
+                self.info.responsible_orders.set_active(btn);
                 self.hw_tx
                     .send(turn_on_call_btn_light)
                     .unwrap();
             }
             State::Moving => {
-                self.info.responsible_orders.add_order(btn);
+                self.info.responsible_orders.set_active(btn);
                 self.hw_tx
                     .send(turn_on_call_btn_light)
                     .unwrap();
             }
             State::Idle => {
-                self.info.responsible_orders.add_order(btn);
+                self.info.responsible_orders.set_active(btn);
                 self.hw_tx
                 .send(turn_on_call_btn_light)
                 .unwrap();

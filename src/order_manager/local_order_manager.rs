@@ -106,46 +106,46 @@ mod test {
     #[test]
     fn it_finds_order_above() {
         let mut order_list = order_list::OrderList::new(5);
-        order_list.add_order(CallButton { floor: 3, call: 0 });
-        order_list.add_order(CallButton { floor: 1, call: 2 });
+        order_list.set_active(CallButton { floor: 3, call: 0 });
+        order_list.set_active(CallButton { floor: 1, call: 2 });
         assert!(order_above(&order_list, 1));
     }
 
     #[test]
     fn it_finds_order_in_the_top() {
         let mut order_list = order_list::OrderList::new(5);
-        order_list.add_order(CallButton { floor: 4, call: 2 });
+        order_list.set_active(CallButton { floor: 4, call: 2 });
         assert!(order_above(&order_list, 1));
     }
 
     #[test]
     fn it_finds_order_in_the_bottom() {
         let mut order_list = order_list::OrderList::new(5);
-        order_list.add_order(CallButton { floor: 0, call: 2 });
+        order_list.set_active(CallButton { floor: 0, call: 2 });
         assert!(order_below(&order_list, 1));
     }
 
     #[test]
     fn it_finds_order_below() {
         let mut order_list = order_list::OrderList::new(5);
-        order_list.add_order(CallButton { floor: 3, call: 0 });
-        order_list.add_order(CallButton { floor: 0, call: 2 });
+        order_list.set_active(CallButton { floor: 3, call: 0 });
+        order_list.set_active(CallButton { floor: 0, call: 2 });
         assert!(order_below(&order_list, 1));
     }
 
     #[test]
     fn it_finds_no_order_below() {
         let mut order_list = order_list::OrderList::new(5);
-        order_list.add_order(CallButton { floor: 3, call: 0 });
-        order_list.add_order(CallButton { floor: 4, call: 2 });
+        order_list.set_active(CallButton { floor: 3, call: 0 });
+        order_list.set_active(CallButton { floor: 4, call: 2 });
         assert!(!order_below(&order_list, 2));
     }
 
     #[test]
     fn it_finds_no_order_above() {
         let mut order_list = order_list::OrderList::new(5);
-        order_list.add_order(CallButton { floor: 1, call: 0 });
-        order_list.add_order(CallButton { floor: 0, call: 1 });
+        order_list.set_active(CallButton { floor: 1, call: 0 });
+        order_list.set_active(CallButton { floor: 0, call: 1 });
         assert!(!order_above(&order_list, 3));
     }
 }
