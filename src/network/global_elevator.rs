@@ -101,6 +101,7 @@ impl GlobalElevatorInfo {
                 None => {}
             }
         }
+        order_lights.inside_queue = self.global_elevators[self.local_id].clone().unwrap().responsible_orders.inside_queue;
         return order_lights;
     }
 
@@ -118,7 +119,6 @@ impl GlobalElevatorInfo {
 fn merge_remote_active(local_order_info: OrderList, remote_orders: OrderList) -> OrderList {
     let n_floors: usize = local_order_info.up_queue.len();
     let mut new_order_list: OrderList = OrderList::new(n_floors as u8);
-    new_order_list.inside_queue = local_order_info.inside_queue;
     if n_floors != remote_orders.up_queue.len() {
         panic!("Tried to merge elevator orders of different lengths :(");
     }
