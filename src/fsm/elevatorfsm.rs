@@ -68,9 +68,6 @@ impl Elevator {
                 dirn: elevio::DIRN_DOWN,
             })
             .unwrap();
-        for floor in 0..n_floors {
-            clear_all_order_lights_on_floor(&hw_commander, u8::from(floor));
-        }
         return Elevator {
             hw_tx: hw_commander,
             timer_start_tx: timer_start_tx,
@@ -133,7 +130,6 @@ impl Elevator {
                 hw_tx
                     .send(elevio::HardwareCommand::DoorLight { on: false })
                     .unwrap();
-                clear_all_order_lights_on_floor(&hw_tx, self.get_floor());
                 self.info.responsible_orders.clear_orders_on_floor(self.get_floor());
                 let new_dirn: u8 = local_order_manager::choose_direction(self);
                 hw_tx
@@ -188,11 +184,6 @@ impl Elevator {
 
     fn on_new_order(&mut self, btn: poll::CallButton) {
         let state = self.get_state();
-        let turn_on_call_btn_light = elevio::HardwareCommand::CallButtonLight {
-            floor: btn.floor,
-            call: btn.call,
-            on: true
-        };
 
         match state {
             State::DoorOpen => {
@@ -201,27 +192,15 @@ impl Elevator {
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
                 }
                 self.info.responsible_orders.set_active(btn);
-                self.hw_tx
-                    .send(turn_on_call_btn_light)
-                    .unwrap();
             }
             State::Obstructed => {
                 self.info.responsible_orders.set_active(btn);
-                self.hw_tx
-                    .send(turn_on_call_btn_light)
-                    .unwrap();
             }
             State::Moving => {
                 self.info.responsible_orders.set_active(btn);
-                self.hw_tx
-                    .send(turn_on_call_btn_light)
-                    .unwrap();
             }
             State::Idle => {
                 self.info.responsible_orders.set_active(btn);
-                self.hw_tx
-                .send(turn_on_call_btn_light)
-                .unwrap();
                 if self.get_floor() == btn.floor {
                     self.hw_tx
                         .send(elevio::HardwareCommand::DoorLight { on: true })
@@ -256,21 +235,6 @@ impl Elevator {
                 }
             }
         }
-    }
-}
-
-fn clear_all_order_lights_on_floor(
-    hw_tx: &crossbeam_channel::Sender<elevio::HardwareCommand>,
-    floor: u8,
-) {
-    for c in 0..3 {
-        hw_tx
-            .send(elevio::HardwareCommand::CallButtonLight {
-                floor: floor,
-                call: c,
-                on: false,
-            })
-            .unwrap();
     }
 }
 

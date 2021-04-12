@@ -90,7 +90,11 @@ impl OrderList {
         return self.get_order_status(button) == OrderType::Pending;
     }
 
-    pub fn get_order_status(&self, button: elevio::CallButton) -> OrderType {
+    pub fn is_active(&self, button: elevio::CallButton) -> bool {
+        return self.get_order_status(button) == OrderType::Active;
+    }
+
+    fn get_order_status(&self, button: elevio::CallButton) -> OrderType {
         match button.call {
             0 => self.up_queue[usize::from(button.floor)],
             1 => self.down_queue[usize::from(button.floor)],

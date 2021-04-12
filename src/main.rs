@@ -105,6 +105,7 @@ fn main() -> std::io::Result<()> {
     let elevator = e::ElevatorHW::init("localhost:15657", elev_num_floors)?;
     println!("Elevator started:\n{:#?}", elevator);
 
+    let elev_info_ticker = cbc::tick(time::Duration::from_millis(15));
     let (hardware_command_tx, hardware_command_rx) =
         cbc::unbounded::<elevio::elev::HardwareCommand>();
     let (door_timer_start_tx, door_timer_start_rx) = cbc::unbounded::<door_timer::TimerCommand>();
@@ -137,7 +138,7 @@ fn main() -> std::io::Result<()> {
     }
 
     let mut fsm =
-        fsm::elevatorfsm::Elevator::new(elev_num_floors, 0, hardware_command_tx, door_timer_start_tx);
+        fsm::elevatorfsm::Elevator::new(elev_num_floors, 0, hardware_command_tx.clone(), door_timer_start_tx);
 
     let mut global_elevator_info = GlobalElevatorInfo::new(fsm.get_info(), 10);
     /* Initialization of hardware polling */
@@ -164,11 +165,6 @@ fn main() -> std::io::Result<()> {
     {
         let elevator = elevator.clone();
         spawn(move || elevio::poll::obstruction(elevator, obstruction_tx, poll_period));
-    }
-
-    let (elevator_info_timeout_tx, elevator_info_timeout_rx) = cbc::unbounded::<u8>();
-    {
-        
     }
 
     loop {
@@ -204,10 +200,21 @@ fn main() -> std::io::Result<()> {
                 a.unwrap();
                 fsm.on_event(Event::OnDoorTimeOut);
             },
-            recv(elevator_info_timeout_rx) -> a => {
-                // global_elevator_info.on_orders_timed_out(a.unwrap());
-            }
         }
+        match elev_info_ticker.try_recv() {
+            Ok(_res) => {global_elevator_info.update_local_elevator_info(fsm.get_info());
+            let set_lights = global_elevator_info.get_orders_for_lights();
+            for f in 0..elev_num_floors {
+                for c in 0..3 {
+                    let btn = elevio::poll::CallButton{floor: f, call: c};
+                    hardware_command_tx.send(
+                        elevio::elev::HardwareCommand::CallButtonLight{floor:btn.floor, call: btn.call, on: set_lights.is_active(btn)}).unwrap();
+                }
+            }
+        },
+        _ => {}
+        }
+
     }
 }
 

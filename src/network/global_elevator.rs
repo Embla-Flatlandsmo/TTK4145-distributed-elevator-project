@@ -91,7 +91,8 @@ impl GlobalElevatorInfo {
     }
 
     pub fn get_orders_for_lights(&self) -> OrderList {
-        let mut order_lights: OrderList = OrderList::new(self.global_elevators.len() as u8);
+        let num_floors = self.get_local_elevator_info().responsible_orders.inside_queue.len();
+        let mut order_lights: OrderList = OrderList::new(num_floors as u8);
         for entry in self.global_elevators.iter().cloned() {
             match entry {
                 Some(elev) => {

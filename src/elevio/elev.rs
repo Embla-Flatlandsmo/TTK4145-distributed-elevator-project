@@ -6,17 +6,11 @@ use std::fmt;
 use std::io::*;
 
 
-
 #[derive(Clone, Debug)]
 pub struct ElevatorHW {
         socket:     Arc<Mutex<TcpStream>>,
     pub num_floors: u8,
 }
-
-
-pub const HALL_UP:      u8 = 0;
-pub const HALL_DOWN:    u8 = 1;
-pub const CAB:          u8 = 2;
 
 
 pub const DIRN_DOWN:    u8 = u8::MAX;
