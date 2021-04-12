@@ -105,7 +105,6 @@ fn main() -> std::io::Result<()> {
     let elevator = e::ElevatorHW::init("localhost:15657", elev_num_floors)?;
     println!("Elevator started:\n{:#?}", elevator);
 
-    let elev_info_ticker = cbc::tick(time::Duration::from_millis(15));
     let (hardware_command_tx, hardware_command_rx) =
         cbc::unbounded::<elevio::elev::HardwareCommand>();
     let (door_timer_start_tx, door_timer_start_rx) = cbc::unbounded::<door_timer::TimerCommand>();
@@ -139,8 +138,41 @@ fn main() -> std::io::Result<()> {
 
     let mut fsm =
         fsm::elevatorfsm::Elevator::new(elev_num_floors, 0, hardware_command_tx.clone(), door_timer_start_tx);
+    
+    // Global elevator info manager
+    let (elevator_info_tx, elevator_info_rx) = cbc::unbounded::<fsm::elevatorfsm::ElevatorInfo>();
+    let (remote_update_tx, remote_update_rx) = cbc::unbounded::<Vec<fsm::elevatorfsm::ElevatorInfo>>();
+    let (global_info_tx, global_info_rx) = cbc::unbounded::<GlobalElevatorInfo>();
+    {
+        let elev_info_init = fsm.get_info();
+        spawn(move || network::global_elevator::global_elevator_info(elev_info_init, 10, elevator_info_rx, remote_update_rx, global_info_tx));
+    }
 
-    let mut global_elevator_info = GlobalElevatorInfo::new(fsm.get_info(), 10);
+    // Thread that 'does something' with the global elevator info received
+    {
+        spawn(move || {
+            let mut old_lights: order_manager::order_list::OrderList = order_manager::order_list::OrderList::new(elev_num_floors);
+            loop {
+                cbc::select! {
+                    recv(global_info_rx) -> a => {
+                        let global_info = a.unwrap();
+                        let set_lights = global_info.get_orders_for_lights();
+                        for f in 0..elev_num_floors {
+                            for c in 0..3 {
+                                let btn = elevio::poll::CallButton{floor: f, call: c};
+                                if old_lights.is_active(btn) != set_lights.is_active(btn) {
+                                    hardware_command_tx.send(
+                                        elevio::elev::HardwareCommand::CallButtonLight{floor:btn.floor, call: btn.call, on: set_lights.is_active(btn)}).unwrap();
+                                }
+                            }
+                        }
+                        old_lights = set_lights;
+                    },
+                }
+            }
+    });
+    }
+
     /* Initialization of hardware polling */
     let poll_period = time::Duration::from_millis(25);
     let (call_button_tx, call_button_rx) = cbc::unbounded::<elevio::poll::CallButton>();
@@ -181,40 +213,31 @@ fn main() -> std::io::Result<()> {
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);
                 fsm.on_event(Event::OnNewOrder{btn: call_button});
+                elevator_info_tx.send(fsm.get_info()).unwrap();
             },
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
                 fsm.on_event(Event::OnFloorArrival{floor: floor});
                 println!("Floor: {:#?}", floor);
+                elevator_info_tx.send(fsm.get_info()).unwrap();
 
             },
             recv(stop_button_rx) -> a => {
                 let _stop = a.unwrap();
                 // This elevator doesn't care about stopping
+                elevator_info_tx.send(fsm.get_info()).unwrap();
             },
             recv(obstruction_rx) -> a => {
                 let obstr = a.unwrap();
-                fsm.on_event(Event::OnObstructionSignal{active: obstr})
+                fsm.on_event(Event::OnObstructionSignal{active: obstr});
+                elevator_info_tx.send(fsm.get_info()).unwrap();
             },
             recv(door_timeout_rx) -> a => {
                 a.unwrap();
                 fsm.on_event(Event::OnDoorTimeOut);
+                elevator_info_tx.send(fsm.get_info()).unwrap();
             },
         }
-        match elev_info_ticker.try_recv() {
-            Ok(_res) => {global_elevator_info.update_local_elevator_info(fsm.get_info());
-            let set_lights = global_elevator_info.get_orders_for_lights();
-            for f in 0..elev_num_floors {
-                for c in 0..3 {
-                    let btn = elevio::poll::CallButton{floor: f, call: c};
-                    hardware_command_tx.send(
-                        elevio::elev::HardwareCommand::CallButtonLight{floor:btn.floor, call: btn.call, on: set_lights.is_active(btn)}).unwrap();
-                }
-            }
-        },
-        _ => {}
-        }
-
     }
 }
 

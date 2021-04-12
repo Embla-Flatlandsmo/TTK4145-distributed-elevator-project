@@ -2,7 +2,10 @@ use crate::elevio::poll::CallButton;
 use crate::fsm::elevatorfsm::ElevatorInfo;
 use crate::order_assigner::cost_function;
 use crate::order_manager::order_list::{OrderList, OrderType};
+use crossbeam_channel as cbc;
+use std::time;
 
+#[derive(Clone, Debug)]
 pub struct GlobalElevatorInfo {
     local_id: usize,
     global_elevators: Vec<Option<ElevatorInfo>>,
@@ -114,6 +117,26 @@ impl GlobalElevatorInfo {
         return self.clone().global_elevators[self.local_id]
             .clone()
             .unwrap();
+    }
+}
+
+pub fn global_elevator_info(local_elev_init: ElevatorInfo, max_num_floors: usize, local_update: cbc::Receiver<ElevatorInfo>, remote_update: cbc::Receiver<Vec<ElevatorInfo>>, ch: cbc::Sender<GlobalElevatorInfo>) {
+    let mut global_info: GlobalElevatorInfo = GlobalElevatorInfo::new(local_elev_init, max_num_floors);
+    let ticker = cbc::tick(time::Duration::from_millis(15));
+    loop {
+        cbc::select! {
+            recv(local_update) -> a => {
+                let local_info = a.unwrap();
+                global_info.update_local_elevator_info(local_info);
+            },
+            recv(remote_update) -> a => {
+                let remote_info = a.unwrap();
+                global_info.update_remote_elevator_info(remote_info);
+            },
+            recv(ticker) -> _ => {
+                ch.send(global_info.clone()).unwrap();
+            },
+        }
     }
 }
 
