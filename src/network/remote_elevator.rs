@@ -65,60 +65,58 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Send
 
     loop {
         let mut modified = false;
-        let mut e = RemoteElevatorUpdate{
-            peers: Vec::new(),
-            new: None,
-            lost: Vec::new(),
-        };
+        let mut peers = Vec::new();
+        let mut lost = Vec::new();
+        let mut new_elevator_id: usize = 0; //have to initialize with value
 
         let r = s.recv(&mut buf);
         let now = time::Instant::now();
+        let mut new_elevator = false;
+
         // Find new peers transmitting elevator info
         match r {
             Ok(n) => {
                 let msg = std::str::from_utf8(&buf[..n]).unwrap();
-                let info = serde_json::from_str::<ElevatorInfo>(&msg).unwrap();
-                let id = info.clone().id;
-                e.new = if !last_seen.contains_key(&id.clone()) {
+                let elev_info = serde_json::from_str::<ElevatorInfo>(&msg).unwrap();
+                let id = elev_info.clone().id;
+                if !last_seen.contains_key(&id.clone()) {
                     modified = true;
-                    Some(info.clone())
-                } else {
-                    None
-                };
+                    new_elevator = true;
+                    new_elevator_id = id.clone();
+                }
                 last_seen.insert(id.clone(), now);
-                active_peers.insert(id.clone(), info.clone());
+                active_peers.insert(id.clone(), elev_info.clone());
                 lost_peers.remove(&id.clone());
             }
-            Err(_e) => {},
+            Err(e) => {},
         }
 
-
         // Send cab calls to reconnecting node
-        /*for id in e.new {
-            if e.lost.contains_key(id){
+        if new_elevator{
+            if lost_peers.contains_key(&new_elevator_id.clone()){
                 //broadcast_cab_calls_to_new_elevator(id);
             }
-        }*/
+        }    
 
         // Finding lost peers
         for (id, when_last_seen) in &last_seen {
             if now.duration_since(*when_last_seen) > timeout {
-                e.lost.push(active_peers.get(id).unwrap().clone()); //what if node is not in elev_info_active?
+                lost.push(active_peers.get(id).unwrap().clone()); //what if node is not in elev_info_active?
                 lost_peers.insert(id.clone(), active_peers.get(&id).unwrap().clone());
                 modified = true;
             }
         }
 
         // .. and removing them
-        for elev in &e.lost {
+        for elev in &lost {
             last_seen.remove(&elev.id.clone());
             active_peers.remove(&elev.id.clone());
         }
 
         // Sending remote elevator update
         if modified {
-            e.peers = active_peers.values().cloned().collect();
-            elev_info_update.send(e.peers.clone()).unwrap();
+            peers = active_peers.values().cloned().collect();
+            elev_info_update.send(peers.clone()).unwrap();
         }
     }
 }
