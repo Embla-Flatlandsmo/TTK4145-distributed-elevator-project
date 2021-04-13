@@ -125,10 +125,11 @@ fn main() -> std::io::Result<()> {
     /*----------------METWWORK---------------------*/
     // The sender for peer discovery
     let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
+    let (elevator_info_tx, elevator_info_rx) = cbc::unbounded::<ElevatorInfo>();
     {
         //let id = id.clone();
         spawn(move || {
-            network::remote_elevator::tx::<ElevatorInfo>(peer_port, fsm, peer_tx_enable_rx);
+            network::remote_elevator::tx::<ElevatorInfo>(peer_port, elevator_info_rx, peer_tx_enable_rx);
         });
     }
     // (periodically disable/enable the peer broadcast, to provoke new peer / peer loss messages)
@@ -189,27 +190,32 @@ fn main() -> std::io::Result<()> {
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);
                 fsm.on_event(Event::OnNewOrder{btn: call_button});
+                elevator_info_tx.send(fsm.get_info()).unwrap();           
             },
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
                 fsm.on_event(Event::OnFloorArrival{floor: floor});
                 println!("Floor: {:#?}", floor);
-
+                elevator_info_tx.send(fsm.get_info()).unwrap();
             },
             recv(stop_button_rx) -> a => {
                 let _stop = a.unwrap();
+                elevator_info_tx.send(fsm.get_info()).unwrap();
                 // This elevator doesn't care about stopping
             },
             recv(obstruction_rx) -> a => {
                 let obstr = a.unwrap();
-                fsm.on_event(Event::OnObstructionSignal{active: obstr})
+                fsm.on_event(Event::OnObstructionSignal{active: obstr});
+                elevator_info_tx.send(fsm.get_info()).unwrap();
             },
             recv(door_timeout_rx) -> a => {
                 a.unwrap();
                 fsm.on_event(Event::OnDoorTimeOut);
+                elevator_info_tx.send(fsm.get_info()).unwrap();
             },
             recv(elevator_info_timeout_rx) -> a => {
                 // global_elevator_info.on_orders_timed_out(a.unwrap());
+                elevator_info_tx.send(fsm.get_info()).unwrap();
             }
         }
     }

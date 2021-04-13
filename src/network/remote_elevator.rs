@@ -14,14 +14,21 @@ pub struct RemoteElevatorUpdate {
     pub lost:   Vec<ElevatorInfo>,
 }
 
-pub fn tx<ElevatorInfo: serde::Serialize>(port: u16, ref mut elev: Elevator, tx_enable: cbc::Receiver<bool>){
+pub fn tx<ElevatorInfo: Clone + serde::Serialize>(port: u16, elev_info: cbc::Receiver::<ElevatorInfo>, tx_enable: cbc::Receiver<bool>){
 
     let s = sock::new_tx(port).unwrap();
     
     let mut enabled = true;
 
     let ticker = cbc::tick(time::Duration::from_millis(15));
+    let mut local_info: ElevatorInfo;
 
+    cbc::select! {
+        recv(elev_info) -> new_info => {
+            local_info = new_info.unwrap();
+        }
+    }
+    
     loop {
         cbc::select! {
             recv(tx_enable) -> enable => {
@@ -29,7 +36,7 @@ pub fn tx<ElevatorInfo: serde::Serialize>(port: u16, ref mut elev: Elevator, tx_
             },
             recv(ticker) -> _ => {
                 if enabled {
-                    let data = elev.get_info();
+                    let data = local_info.clone();
                     let serialized = serde_json::to_string(&data).unwrap();
                     let res = s.send(serialized.as_bytes());
                     match res {
@@ -37,6 +44,9 @@ pub fn tx<ElevatorInfo: serde::Serialize>(port: u16, ref mut elev: Elevator, tx_
                         Err(res) => {println!("Couldn't send bcast");}
                     }
                 }
+            },
+            recv(elev_info) -> new_info => {
+                local_info = new_info.unwrap();
             }
         }
     }
