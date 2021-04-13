@@ -107,9 +107,7 @@ fn main() -> std::io::Result<()> {
     }
 
     let (assign_orders_locally_tx, assign_orders_locally_rx) = cbc::unbounded::<CallButton>();
-    {
-        spawn(move || order_assigner::order_assigner(global_info_rx, call_button_rx, set_pending_tx, order_send_tx, assign_orders_locally_tx));
-    }
+
     // Thread that 'does something' with the global elevator info received
     /*
     {
@@ -168,6 +166,18 @@ fn main() -> std::io::Result<()> {
     }
 
     /*----------------METWWORK---------------------*/
+
+    // The sender for orders
+    let (order_send_tx, order_send_rx) = cbc::unbounded::<(usize, CallButton)>();
+    spawn(move || {
+        network::bcast::tx(order_port, order_send_rx);
+    });
+    // The reciever for orders
+    let (order_recv_tx, order_recv_rx) = cbc::unbounded::<(usize, CallButton)>();
+    spawn(move || {
+        network::bcast::rx(order_port, order_recv_tx);
+    });
+
     // The sender for peer discovery
     let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
     let (elevator_info_tx, elevator_info_rx) = cbc::unbounded::<ElevatorInfo>();
@@ -220,6 +230,10 @@ fn main() -> std::io::Result<()> {
     spawn(move || {
         network::bcast::rx(msg_port, custom_data_recv_tx);
     });
+
+    {
+        spawn(move || order_assigner::order_assigner(global_info_rx, call_button_rx, set_pending_tx, order_send_tx, assign_orders_locally_tx));
+    }
 
     loop {
         cbc::select! {
