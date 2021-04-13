@@ -15,6 +15,7 @@ use network::global_elevator::GlobalElevatorInfo;
 use elevio::poll::CallButton;
 
 use order_assigner::order_assigner;
+use crate::fsm::elevatorfsm::ElevatorInfo;
 
 // Data types to be sent on the network must derive traits for serialization
 
@@ -32,11 +33,12 @@ struct CustomDataType {
 }
 
 pub const DOOR_OPEN_TIME: u64 = 3;
+pub const ID: usize = 1;
 
 fn main() -> std::io::Result<()> {
     /* ------------------NETWORK----------------- */
     // Genreate id: either from command line, or a default rust@ip#pid
-    let args: Vec<String> = env::args().collect();
+    /*let args: Vec<String> = env::args().collect();
     let id = if args.len() > 1 {
         args[1].clone()
     } else {
@@ -46,7 +48,7 @@ fn main() -> std::io::Result<()> {
             .unwrap()
             .ip();
         format!("rust@{}#{}", local_ip, process::id())
-    };
+    };*/
 
     let local_elevator_id = 0;
 
@@ -54,69 +56,6 @@ fn main() -> std::io::Result<()> {
     let peer_port = 19738;
     let order_port = 19739;
 
-    // The sender for peer discovery
-    let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
-    {
-        let id = id.clone();
-        spawn(move || {
-            network::peers::tx(peer_port, id, peer_tx_enable_rx);
-        });
-    }
-    // (periodically disable/enable the peer broadcast, to provoke new peer / peer loss messages)
-    spawn(move || loop {
-        sleep(time::Duration::new(6, 0));
-        peer_tx_enable_tx.send(false).unwrap();
-        sleep(time::Duration::new(3, 0));
-        peer_tx_enable_tx.send(true).unwrap();
-    });
-    // The receiver for peer discovery updates
-    let (peer_update_tx, peer_update_rx) = cbc::unbounded::<network::peers::PeerUpdate>();
-    spawn(move || {
-        network::peers::rx(peer_port, peer_update_tx);
-    });
-
-    // The sender for orders
-    let (order_send_tx, order_send_rx) = cbc::unbounded::<(usize, CallButton)>();
-    spawn(move || {
-        network::bcast::tx(order_port, order_send_rx);
-    });
-    // The reciever for orders
-    let (order_recv_tx, order_recv_rx) = cbc::unbounded::<(usize, CallButton)>();
-    spawn(move || {
-        network::bcast::rx(order_port, order_recv_tx);
-    });
-
-    
-    // Periodically produce a custom data message
-    let (custom_data_send_tx, custom_data_send_rx) = cbc::unbounded::<CustomDataType>();
-    {
-        let id = id.clone();
-        spawn(move || {
-            let new_order = order_t {
-                node: "192.168.1.1".to_string(),
-                floor: 2,
-            };
-            let mut cd = CustomDataType {
-                message: format!("Hello from node {}", id),
-                order: new_order,
-                iteration: 0,
-            };
-            loop {
-                custom_data_send_tx.send(cd.clone()).unwrap();
-                cd.iteration += 1;
-                sleep(time::Duration::new(1, 0));
-            }
-        });
-    }
-    // The sender for our custom data
-    spawn(move || {
-        network::bcast::tx(msg_port, custom_data_send_rx);
-    });
-    // The receiver for our custom data
-    let (custom_data_recv_tx, custom_data_recv_rx) = cbc::unbounded::<CustomDataType>();
-    spawn(move || {
-        network::bcast::rx(msg_port, custom_data_recv_tx);
-    });
 
     /*----------------SINGLE ELEVATOR---------------------*/
     let elev_num_floors = 4;
@@ -223,6 +162,65 @@ fn main() -> std::io::Result<()> {
         spawn(move || elevio::poll::obstruction(elevator, obstruction_tx, poll_period));
     }
 
+    let (elevator_info_timeout_tx, elevator_info_timeout_rx) = cbc::unbounded::<u8>();
+    {
+        
+    }
+
+    /*----------------METWWORK---------------------*/
+    // The sender for peer discovery
+    let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
+    let (elevator_info_tx, elevator_info_rx) = cbc::unbounded::<ElevatorInfo>();
+    {
+        //let id = id.clone();
+        spawn(move || {
+            network::remote_elevator::tx::<ElevatorInfo>(peer_port, elevator_info_rx, peer_tx_enable_rx);
+        });
+    }
+    // (periodically disable/enable the peer broadcast, to provoke new peer / peer loss messages)
+    spawn(move || loop {
+        sleep(time::Duration::new(6, 0));
+        peer_tx_enable_tx.send(false).unwrap();
+        sleep(time::Duration::new(3, 0));
+        peer_tx_enable_tx.send(true).unwrap();
+    });
+    // The receiver for peer discovery updates
+    let (peer_update_tx, peer_update_rx) = cbc::unbounded::<Vec<ElevatorInfo>>();
+    spawn(move || {
+        network::remote_elevator::rx::<Vec<ElevatorInfo>>(peer_port, peer_update_tx);
+    });
+    
+    // Periodically produce a custom data message
+    let (custom_data_send_tx, custom_data_send_rx) = cbc::unbounded::<CustomDataType>();
+    {
+        //let id = id.clone();
+        spawn(move || {
+            let new_order = order_t {
+                node: "192.168.1.1".to_string(),
+                floor: 2,
+            };
+            let mut cd = CustomDataType {
+                message: format!("Hello from node {}", ID),
+                order: new_order,
+                iteration: 0,
+            };
+            loop {
+                custom_data_send_tx.send(cd.clone()).unwrap();
+                cd.iteration += 1;
+                sleep(time::Duration::new(1, 0));
+            }
+        });
+    }
+    // The sender for our custom data
+    spawn(move || {
+        network::bcast::tx(msg_port, custom_data_send_rx);
+    });
+    // The receiver for our custom data
+    let (custom_data_recv_tx, custom_data_recv_rx) = cbc::unbounded::<CustomDataType>();
+    spawn(move || {
+        network::bcast::rx(msg_port, custom_data_recv_tx);
+    });
+
     loop {
         cbc::select! {
             recv(peer_update_rx) -> a => {
@@ -243,17 +241,19 @@ fn main() -> std::io::Result<()> {
             },
             recv(assign_orders_locally_rx) -> a => {
                 let call_button = a.unwrap();
-                fsm.on_event(Event::OnNewOrder(btn: call_button));
+                println!("{:#?}", call_button);
+                fsm.on_event(Event::OnNewOrder{btn: call_button});
+                elevator_info_tx.send(fsm.get_info()).unwrap();           
             },
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
                 fsm.on_event(Event::OnFloorArrival{floor: floor});
                 println!("Floor: {:#?}", floor);
                 elevator_info_tx.send(fsm.get_info()).unwrap();
-
             },
             recv(stop_button_rx) -> a => {
                 let _stop = a.unwrap();
+                elevator_info_tx.send(fsm.get_info()).unwrap();
                 // This elevator doesn't care about stopping
                 elevator_info_tx.send(fsm.get_info()).unwrap();
             },
@@ -267,6 +267,10 @@ fn main() -> std::io::Result<()> {
                 fsm.on_event(Event::OnDoorTimeOut);
                 elevator_info_tx.send(fsm.get_info()).unwrap();
             },
+            recv(elevator_info_timeout_rx) -> a => {
+                // global_elevator_info.on_orders_timed_out(a.unwrap());
+                elevator_info_tx.send(fsm.get_info()).unwrap();
+            }
         }
     }
 }

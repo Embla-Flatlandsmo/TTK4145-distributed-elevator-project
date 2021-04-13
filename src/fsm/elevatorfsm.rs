@@ -53,7 +53,7 @@ pub enum Event {
 pub const DOOR_OPEN_TIME: u64 = 3;
 impl ElevatorInfo {
     pub fn get_id(&self) -> usize {
-        return self.id;
+        return self.clone().id;
     }
 }
 impl Elevator {
