@@ -10,6 +10,11 @@ pub fn order_assigner(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
 
     let mut global_elevator_info: GlobalElevatorInfo;
 
+    cbc::select!{
+        recv(global_info_ch) -> a => {
+            global_elevator_info = a.unwrap();
+        }
+    }
     loop {
         cbc::select!{
             recv(global_info_ch) -> a => {
@@ -24,7 +29,7 @@ pub fn order_assigner(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
                     let lowest_cost_id = global_elevator_info.find_lowest_cost_id(call_button);
                     let res = order_send.send((lowest_cost_id, call_button));
                     match res {
-                        Ok(res) => {set_pending.send((lowest_cost_id, call_button))},
+                        Ok(res) => {set_pending.send((lowest_cost_id, call_button));},
                         Err(res) => {println!("Couldn't send remote order");}
                     };
                 }
