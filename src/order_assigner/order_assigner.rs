@@ -22,6 +22,9 @@ pub fn order_assigner(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
             },
             recv(call_button_recv) -> a => {
                 let call_button = a.unwrap();
+                println!("{:#?}", call_button);
+                assign_order_locally.send(call_button).unwrap();
+                /*
                 if call_button.call == 2 {
                     assign_order_locally.send(call_button);
                 }
@@ -33,6 +36,7 @@ pub fn order_assigner(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
                         Err(res) => {println!("Couldn't send remote order");}
                     };
                 }
+                */
             }
         }
     }
