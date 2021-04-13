@@ -1,10 +1,10 @@
 use std::time;
 use std::thread;
 use crossbeam_channel as cbc;
-
+use serde;
 use super::elev;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Copy, Clone)]
 pub struct CallButton {
     pub floor:  u8,
     pub call:   u8,

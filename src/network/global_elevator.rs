@@ -120,8 +120,13 @@ impl GlobalElevatorInfo {
     }
 }
 
-pub fn global_elevator_info(local_elev_init: ElevatorInfo, max_num_floors: usize, local_update: cbc::Receiver<ElevatorInfo>, remote_update: cbc::Receiver<Vec<ElevatorInfo>>, ch: cbc::Sender<GlobalElevatorInfo>) {
-    let mut global_info: GlobalElevatorInfo = GlobalElevatorInfo::new(local_elev_init, max_num_floors);
+pub fn global_elevator_info(local_elev_init: ElevatorInfo, 
+    max_num_floors: usize, 
+    local_update: cbc::Receiver<ElevatorInfo>, 
+    remote_update: cbc::Receiver<Vec<ElevatorInfo>>,
+    set_pending: cbc::Receiver<(usize, CallButton)>, 
+    global_info_update: cbc::Sender<GlobalElevatorInfo>) {
+    let mut global_info: GlobalElevatorInfo = GlobalElevatorInfo::new(local_elev_init, 10);
     let ticker = cbc::tick(time::Duration::from_millis(15));
     loop {
         cbc::select! {
@@ -134,11 +139,19 @@ pub fn global_elevator_info(local_elev_init: ElevatorInfo, max_num_floors: usize
                 global_info.update_remote_elevator_info(remote_info);
             },
             recv(ticker) -> _ => {
-                ch.send(global_info.clone()).unwrap();
+                global_info_update.send(global_info.clone()).unwrap();
             },
+            recv(set_pending) -> (a) => {
+                let (id, btn) = a.unwrap();
+                global_info.set_to_pending(id, btn);
+            }
         }
     }
 }
+
+
+
+
 
 fn merge_remote_active(local_order_info: OrderList, remote_orders: OrderList) -> OrderList {
     let n_floors: usize = local_order_info.up_queue.len();

@@ -21,4 +21,5 @@ pub mod fsm {
 
 pub mod order_assigner {
     pub mod cost_function;
+    pub mod order_assigner;
 }
