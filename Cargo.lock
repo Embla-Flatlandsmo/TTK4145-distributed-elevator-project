@@ -113,6 +113,7 @@ dependencies = [
 name = "project-gruppe47"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "crossbeam-channel",
  "rand",
  "serde",

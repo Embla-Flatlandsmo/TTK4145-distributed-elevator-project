@@ -1,4 +1,5 @@
 use crate::elevio::poll::CallButton;
+use crate::elevio::elev::HardwareCommand;
 use crate::fsm::elevatorfsm::ElevatorInfo;
 use crate::order_assigner::cost_function;
 use crate::order_manager::order_list::{OrderList, OrderType};
@@ -120,35 +121,67 @@ impl GlobalElevatorInfo {
     }
 }
 
-pub fn global_elevator_info(local_elev_init: ElevatorInfo, 
-    max_num_floors: usize, 
+pub fn global_elevator_info(
     local_update: cbc::Receiver<ElevatorInfo>, 
     remote_update: cbc::Receiver<Vec<ElevatorInfo>>,
     set_pending: cbc::Receiver<(usize, CallButton)>, 
     global_info_update: cbc::Sender<GlobalElevatorInfo>) {
-    let mut global_info: GlobalElevatorInfo = GlobalElevatorInfo::new(local_elev_init, 10);
+
+    let mut global_info: GlobalElevatorInfo;
+
+    match local_update.recv() {
+        Ok(res) => global_info = GlobalElevatorInfo::new(res, 10),
+        _ => {panic!("Cannot initialize global info")}
+    }
+
     let ticker = cbc::tick(time::Duration::from_millis(15));
+
     loop {
         cbc::select! {
             recv(local_update) -> a => {
                 let local_info = a.unwrap();
                 global_info.update_local_elevator_info(local_info);
+                global_info_update.send(global_info.clone()).unwrap();
             },
             recv(remote_update) -> a => {
                 let remote_info = a.unwrap();
                 global_info.update_remote_elevator_info(remote_info);
+                global_info_update.send(global_info.clone()).unwrap()
             },
             recv(ticker) -> _ => {
-                global_info_update.send(global_info.clone()).unwrap();
+                //global_info_update.send(global_info.clone()).unwrap();
             },
             recv(set_pending) -> (a) => {
                 let (id, btn) = a.unwrap();
                 global_info.set_to_pending(id, btn);
+                global_info_update.send(global_info.clone()).unwrap();
             }
         }
     }
 }
 
+pub fn set_order_lights(global_info_rx: cbc::Receiver<GlobalElevatorInfo>, set_lights_tx: cbc::Sender<HardwareCommand>) {
+    let elev_num_floors = 4;
+    let mut old_lights: OrderList = OrderList::new(elev_num_floors);
+    loop {
+        cbc::select! {
+            recv(global_info_rx) -> a => {
+                let global_info = a.unwrap();
+                let set_lights = global_info.get_orders_for_lights();
+                for f in 0..elev_num_floors {
+                    for c in 0..3 {
+                        let btn = CallButton{floor: f, call: c};
+                        if old_lights.is_active(btn) != set_lights.is_active(btn) {
+                            set_lights_tx.send(
+                                HardwareCommand::CallButtonLight{floor:btn.floor, call: btn.call, on: set_lights.is_active(btn)}).unwrap();
+                        }
+                    }
+                }
+                old_lights = set_lights;
+            },
+        }
+    }
+}
 
 
 
