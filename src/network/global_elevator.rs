@@ -59,8 +59,8 @@ impl GlobalElevatorInfo {
                     Some(v) => {
                         updated_info = v.clone();
                         updated_info.responsible_orders = merge_remote_orders(
-                            &updated_info.responsible_orders,
-                            &remote_info.responsible_orders,
+                            v.clone().responsible_orders,
+                            remote_info.responsible_orders,
                         );
                         latest_elevator_update[remote_id] = Some(updated_info);
                     }
@@ -210,16 +210,16 @@ fn merge_remote_active(local_order_info: OrderList, remote_orders: OrderList) ->
 
 /// Merges remote order into current order. It prioritizes remote order.
 /// A pending order can only be upgraded to active by `remote_order`.
-fn merge_remote_order(current_order: &OrderType, remote_order: &OrderType) -> OrderType {
+fn merge_remote_order(current_order: OrderType, remote_order: OrderType) -> OrderType {
     match current_order {
         OrderType::Pending => {
-            if *remote_order == OrderType::Active {
-                return *remote_order;
+            if remote_order == OrderType::Active {
+                return remote_order;
             } else {
                 return OrderType::Pending;
             }
         }
-        _ => *remote_order,
+        _ => remote_order,
     }
 }
 
@@ -227,7 +227,7 @@ fn merge_remote_order(current_order: &OrderType, remote_order: &OrderType) -> Or
 ///
 /// *`local_order_info` - The local knowledge of the orderlist of a remote elevator
 /// *`remote_orders` - The update received from the remote elevator
-fn merge_remote_orders(local_order_info: &OrderList, remote_orders: &OrderList) -> OrderList {
+fn merge_remote_orders(local_order_info: OrderList, remote_orders: OrderList) -> OrderList {
     let n_floors: usize = local_order_info.up_queue.len();
     let mut new_order_list: OrderList = OrderList::new(n_floors as u8);
     new_order_list.inside_queue = local_order_info.inside_queue.clone();
@@ -237,14 +237,14 @@ fn merge_remote_orders(local_order_info: &OrderList, remote_orders: &OrderList) 
 
     for i in 0..=n_floors - 1 {
         new_order_list.up_queue[i] =
-            merge_remote_order(&local_order_info.up_queue[i], &remote_orders.up_queue[i]);
+            merge_remote_order(local_order_info.up_queue[i], remote_orders.up_queue[i]);
         new_order_list.down_queue[i] = merge_remote_order(
-            &local_order_info.down_queue[i],
-            &remote_orders.down_queue[i],
+            local_order_info.down_queue[i],
+            remote_orders.down_queue[i],
         );
         new_order_list.inside_queue[i] = merge_remote_order(
-            &local_order_info.inside_queue[i],
-            &remote_orders.inside_queue[i],
+            local_order_info.inside_queue[i],
+            remote_orders.inside_queue[i],
         );
     }
     return new_order_list;

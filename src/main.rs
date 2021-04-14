@@ -36,8 +36,6 @@ pub const DOOR_OPEN_TIME: u64 = 3;
 pub const ID: usize = 1;
 
 fn main() -> std::io::Result<()> {
-    let local_elevator_id = 0;
-
     let msg_port = 19747;
     let peer_port = 19738;
     let order_port = 19739;
@@ -80,7 +78,7 @@ fn main() -> std::io::Result<()> {
     }
 
     let mut fsm =
-        fsm::elevatorfsm::Elevator::new(elev_num_floors, 0, hardware_command_tx.clone(), door_timer_start_tx);
+        fsm::elevatorfsm::Elevator::new(elev_num_floors, ID, hardware_command_tx.clone(), door_timer_start_tx);
     
     // Global elevator info manager
     let (local_info_for_global_tx, local_info_for_global_rx) = cbc::unbounded::<fsm::elevatorfsm::ElevatorInfo>();
@@ -186,38 +184,7 @@ fn main() -> std::io::Result<()> {
     // The receiver for peer discovery updates
     let (peer_update_tx, peer_update_rx) = cbc::unbounded::<Vec<ElevatorInfo>>();
     spawn(move || {
-        network::remote_elevator::rx::<Vec<ElevatorInfo>>(peer_port, peer_update_tx);
-    });
-    
-    // Periodically produce a custom data message
-    let (custom_data_send_tx, custom_data_send_rx) = cbc::unbounded::<CustomDataType>();
-    {
-        //let id = id.clone();
-        spawn(move || {
-            let new_order = order_t {
-                node: "192.168.1.1".to_string(),
-                floor: 2,
-            };
-            let mut cd = CustomDataType {
-                message: format!("Hello from node {}", ID),
-                order: new_order,
-                iteration: 0,
-            };
-            loop {
-                custom_data_send_tx.send(cd.clone()).unwrap();
-                cd.iteration += 1;
-                sleep(time::Duration::new(1, 0));
-            }
-        });
-    }
-    // The sender for our custom data
-    spawn(move || {
-        network::bcast::tx(msg_port, custom_data_send_rx);
-    });
-    // The receiver for our custom data
-    let (custom_data_recv_tx, custom_data_recv_rx) = cbc::unbounded::<CustomDataType>();
-    spawn(move || {
-        network::bcast::rx(msg_port, custom_data_recv_tx);
+        network::remote_elevator::rx::<Vec<ElevatorInfo>>(peer_port, remote_update_tx);
     });
 
     {
@@ -227,14 +194,6 @@ fn main() -> std::io::Result<()> {
 
     loop {
         cbc::select! {
-            recv(peer_update_rx) -> a => {
-                let update = a.unwrap();
-                //println!("{:#?}", update);
-            },
-            recv(custom_data_recv_rx) -> a => {
-                let cd = a.unwrap();
-                //println!("{:#?}", cd);
-            },
             recv(order_recv_rx) -> a => {
                 let order = a.unwrap();
                 let id = order.0;
