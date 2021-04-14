@@ -38,10 +38,12 @@ pub fn tx<ElevatorInfo: Clone + serde::Serialize>(port: u16, elev_info: cbc::Rec
                 if enabled {
                     let data = local_info.clone();
                     let serialized = serde_json::to_string(&data).unwrap();
-                    let res = s.send(serialized.as_bytes());
-                    match res {
-                        Ok(res) => {},
-                        Err(res) => {println!("Couldn't send bcast");}
+                    for n in 1..3{
+                        let res = s.send(serialized.as_bytes());
+                        match res {
+                            Ok(res) => {},
+                            Err(res) => {println!("Couldn't send bcast");}
+                        }
                     }
                 }
             },
