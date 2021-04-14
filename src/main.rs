@@ -198,7 +198,7 @@ fn main() -> std::io::Result<()> {
                 let order = a.unwrap();
                 let id = order.0;
                 let call_button = order.1;
-                if id == local_elevator_id {
+                if id == ID {
                     fsm.on_event(Event::OnNewOrder{btn: call_button});
                     elevator_info_tx.send(fsm.get_info()).unwrap();
                     local_info_for_global_tx.send(fsm.get_info()).unwrap();
