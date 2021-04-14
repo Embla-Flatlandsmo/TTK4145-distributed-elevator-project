@@ -37,18 +37,15 @@ pub fn order_assigner(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
                         assign_order_locally.send(call_button);
                     }
                     else {
-                        let res = order_send.send((lowest_cost_id, call_button));
-                        match res {
-                            Ok(res) => {
-                                set_pending.send((lowest_cost_id, call_button));
-                                let check_tx = check_if_active_tx.clone();
-                                spawn(move || {
-                                    sleep(std::time::Duration::from_secs(1));
-                                    check_tx.send((lowest_cost_id, call_button));
-                                });
-                            },
-                            Err(res) => {println!("Couldn't send remote order");}
-                        };
+                        for i in 1..3 {
+                            order_send.send((lowest_cost_id, call_button));
+                        }
+                        set_pending.send((lowest_cost_id, call_button));
+                        let check_tx = check_if_active_tx.clone();
+                        spawn(move || {
+                            sleep(std::time::Duration::from_secs(1));
+                            check_tx.send((lowest_cost_id, call_button));
+                        });
                     }
                 }
             },
