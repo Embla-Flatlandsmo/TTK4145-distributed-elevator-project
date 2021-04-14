@@ -3,6 +3,8 @@ use serde;
 use crate::fsm::elevatorfsm::ElevatorInfo;
 use crate::fsm::elevatorfsm::Elevator;
 use std::time;
+use crate::network::bcast;
+use std::thread::*;
 use std::collections::HashMap;
 #[path = "./sock.rs"]
 mod sock;
@@ -14,10 +16,14 @@ pub struct RemoteElevatorUpdate {
     pub lost:   Vec<ElevatorInfo>,
 }
 
-pub fn tx<ElevatorInfo: Clone + serde::Serialize>(port: u16, elev_info: cbc::Receiver::<ElevatorInfo>, tx_enable: cbc::Receiver<bool>){
+pub fn local_elev_info_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std::marker::Send>(port: u16, elev_info: cbc::Receiver::<ElevatorInfo>, tx_enable: cbc::Receiver<bool>){
 
-    let s = sock::new_tx(port).unwrap();
-    
+    let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<ElevatorInfo>();
+    {
+    spawn(move || {
+        crate::network::bcast::tx(port, send_bcast_rx, 3);
+    });
+}
     let mut enabled = true;
 
     let ticker = cbc::tick(time::Duration::from_millis(15));
@@ -36,15 +42,7 @@ pub fn tx<ElevatorInfo: Clone + serde::Serialize>(port: u16, elev_info: cbc::Rec
             },
             recv(ticker) -> _ => {
                 if enabled {
-                    let data = local_info.clone();
-                    let serialized = serde_json::to_string(&data).unwrap();
-                    for n in 1..3{
-                        let res = s.send(serialized.as_bytes());
-                        match res {
-                            Ok(res) => {},
-                            Err(res) => {println!("Couldn't send bcast");}
-                        }
-                    }
+                    send_bcast_tx.send(local_info.clone());
                 }
             },
             recv(elev_info) -> new_info => {
@@ -54,7 +52,7 @@ pub fn tx<ElevatorInfo: Clone + serde::Serialize>(port: u16, elev_info: cbc::Rec
     }
 }
 
-pub fn rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Sender::<Vec<ElevatorInfo>>) {
+pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Sender::<Vec<ElevatorInfo>>) {
     let timeout = time::Duration::from_millis(500);
     let s = sock::new_rx(port).unwrap();
     s.set_read_timeout(Some(timeout)).unwrap();

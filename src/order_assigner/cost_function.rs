@@ -2,8 +2,9 @@ use crate::elevio::{elev, poll};
 use crate::fsm::door_timer::TimerCommand;
 use crate::fsm::elevatorfsm::*;
 use crossbeam_channel as cbc;
+use crate::util::constants as setting;
 
-pub const TRAVEL_TIME: u64 = 2;
+const TRAVEL_TIME: u64 = 2;
 
 /// Calculates the time it takes for an elevator to reach the idle
 /// state after we have added the new order.
@@ -46,7 +47,7 @@ fn simulate_next_step(fsm: &mut Elevator) -> usize {
         }
         State::DoorOpen => {
             fsm.on_event(Event::OnDoorTimeOut);
-            return DOOR_OPEN_TIME as usize;
+            return setting::DOOR_OPEN_TIME as usize;
         }
         State::Idle => 0,
         _ => 0,

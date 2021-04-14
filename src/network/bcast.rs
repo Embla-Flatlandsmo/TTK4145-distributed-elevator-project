@@ -7,17 +7,19 @@ mod sock;
 
 
 
-pub fn tx<T: serde::Serialize>(port: u16, ch: cbc::Receiver<T>){
+pub fn tx<T: Clone + serde::Serialize>(port: u16, ch: cbc::Receiver<T>, burst_size: usize){
 
     let s = sock::new_tx(port).unwrap();
     
     loop {
         let data = ch.recv().unwrap();
         let serialized = serde_json::to_string(&data).unwrap();
-        let res = s.send(serialized.as_bytes());
-        match res {
-            Ok(res) => {},
-            Err(res) => {println!("Couldn't send bcast");}
+        for i in 0..burst_size {
+            let res = s.send(serialized.as_bytes());
+            match res {
+                Ok(res) => {},
+                Err(res) => {println!("Couldn't send bcast");}
+            }
         }
     }
 }

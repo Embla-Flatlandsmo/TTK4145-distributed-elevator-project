@@ -1,5 +1,5 @@
 use crate::network::global_elevator::GlobalElevatorInfo;
-use crate::elevio::poll::CallButton;
+use crate::elevio::poll::{CallButton, CAB};
 use crossbeam_channel as cbc;
 use std::thread::*;
 
@@ -28,7 +28,7 @@ pub fn order_assigner(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);
                 
-                if call_button.call == 2 {
+                if call_button.call == CAB {
                     assign_order_locally.send(call_button);
                 }
                 else {
@@ -51,7 +51,7 @@ pub fn order_assigner(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
             },
             recv(check_if_active_rx) -> a => {
                 let (id, button) = a.unwrap();
-                if global_elevator_info.is_pending(id, button) {
+                if !global_elevator_info.is_pending(id, button) {
                     assign_order_locally.send(button);
                 }
             }

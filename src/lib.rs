@@ -10,16 +10,20 @@ pub mod elevio {
 }
 
 pub mod order_manager {
-    pub mod local_order_manager;
     pub mod order_list;
 }
 
 pub mod fsm {
     pub mod door_timer;
+    pub mod local_order_manager;
     pub mod elevatorfsm;
 }
 
 pub mod order_assigner {
     pub mod cost_function;
     pub mod order_assigner;
+}
+
+pub mod util {
+    pub mod constants;
 }

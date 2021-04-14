@@ -8,6 +8,8 @@ use elevator::*;
 use crossbeam_channel as cbc;
 use serde;
 
+use util::constants as setting;
+
 use elevio::elev as e;
 use fsm::door_timer;
 use fsm::elevatorfsm::Event;
@@ -32,18 +34,14 @@ struct CustomDataType {
     iteration: u64,
 }
 
-pub const DOOR_OPEN_TIME: u64 = 3;
-pub const ID: usize = 1;
+
 
 fn main() -> std::io::Result<()> {
-    let msg_port = 19747;
-    let peer_port = 19738;
-    let order_port = 19739;
+
 
 
     /*----------------SINGLE ELEVATOR---------------------*/
-    let elev_num_floors = 4;
-    let elevator = e::ElevatorHW::init("localhost:15657", elev_num_floors)?;
+    let elevator = e::ElevatorHW::init("localhost:15657", setting::ELEV_NUM_FLOORS)?;
     println!("Elevator started:\n{:#?}", elevator);
 
     let (hardware_command_tx, hardware_command_rx) =
@@ -52,7 +50,7 @@ fn main() -> std::io::Result<()> {
     let (door_timeout_tx, door_timeout_rx) = cbc::unbounded::<()>();
     /* Thread that keeps track of the door timer */
     spawn(move || {
-        let mut door_timer: door_timer::Timer = door_timer::Timer::new(DOOR_OPEN_TIME);
+        let mut door_timer: door_timer::Timer = door_timer::Timer::new(setting::DOOR_OPEN_TIME);
         loop {
             let r = door_timer_start_rx.try_recv();
             match r {
@@ -78,7 +76,7 @@ fn main() -> std::io::Result<()> {
     }
 
     let mut fsm =
-        fsm::elevatorfsm::Elevator::new(elev_num_floors, ID, hardware_command_tx.clone(), door_timer_start_tx);
+        fsm::elevatorfsm::Elevator::new(setting::ELEV_NUM_FLOORS, setting::ID, hardware_command_tx.clone(), door_timer_start_tx);
     
     // Global elevator info manager
     let (local_info_for_global_tx, local_info_for_global_rx) = cbc::unbounded::<fsm::elevatorfsm::ElevatorInfo>();
@@ -100,14 +98,14 @@ fn main() -> std::io::Result<()> {
     let (assign_orders_locally_tx, assign_orders_locally_rx) = cbc::unbounded::<CallButton>();
     {
         spawn(move || {
-            let mut old_lights: order_manager::order_list::OrderList = order_manager::order_list::OrderList::new(elev_num_floors);
+            let mut old_lights: order_manager::order_list::OrderList = order_manager::order_list::OrderList::new(setting::ELEV_NUM_FLOORS);
             loop {
                 cbc::select! {
                     recv(global_info_rx) -> a => {
                         //forward global info...
                         let global_info = a.unwrap();
                         let set_lights = global_info.get_orders_for_lights();
-                        for f in 0..elev_num_floors {
+                        for f in 0..setting::ELEV_NUM_FLOORS {
                             for c in 0..3 {
                                 let btn = elevio::poll::CallButton{floor: f, call: c};
                                 if old_lights.is_active(btn) != set_lights.is_active(btn) {
@@ -156,12 +154,12 @@ fn main() -> std::io::Result<()> {
     // The sender for orders
     let (order_send_tx, order_send_rx) = cbc::unbounded::<(usize, CallButton)>();
     spawn(move || {
-        network::bcast::tx(order_port, order_send_rx);
+        network::bcast::tx(setting::ORDER_PORT, order_send_rx,3);
     });
     // The reciever for orders
     let (order_recv_tx, order_recv_rx) = cbc::unbounded::<(usize, CallButton)>();
     spawn(move || {
-        network::bcast::rx(order_port, order_recv_tx);
+        network::bcast::rx(setting::ORDER_PORT, order_recv_tx);
     });
 
     // The sender for peer discovery
@@ -170,21 +168,21 @@ fn main() -> std::io::Result<()> {
     {
         //let id = id.clone();
         spawn(move || {
-            network::remote_elevator::tx::<ElevatorInfo>(peer_port, elevator_info_rx, peer_tx_enable_rx);
+            network::remote_elevator::local_elev_info_tx::<ElevatorInfo>(setting::PEER_PORT, elevator_info_rx, peer_tx_enable_rx);
         });
     }
     elevator_info_tx.send(fsm.get_info());
     // (periodically disable/enable the peer broadcast, to provoke new peer / peer loss messages)
-    spawn(move || loop {
+    /*spawn(move || loop {
         sleep(time::Duration::new(6, 0));
         peer_tx_enable_tx.send(false).unwrap();
         sleep(time::Duration::new(3, 0));
         peer_tx_enable_tx.send(true).unwrap();
-    });
+    });*/
     // The receiver for peer discovery updates
     let (peer_update_tx, peer_update_rx) = cbc::unbounded::<Vec<ElevatorInfo>>();
     spawn(move || {
-        network::remote_elevator::rx::<Vec<ElevatorInfo>>(peer_port, remote_update_tx);
+        network::remote_elevator::remote_elev_info_rx::<Vec<ElevatorInfo>>(setting::PEER_PORT, remote_update_tx);
     });
 
     {
@@ -198,7 +196,7 @@ fn main() -> std::io::Result<()> {
                 let order = a.unwrap();
                 let id = order.0;
                 let call_button = order.1;
-                if id == ID {
+                if id == setting::ID {
                     fsm.on_event(Event::OnNewOrder{btn: call_button});
                     elevator_info_tx.send(fsm.get_info()).unwrap();
                     local_info_for_global_tx.send(fsm.get_info()).unwrap();

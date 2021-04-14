@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::elevio::elev as elevio;
 use crate::elevio::poll;
-use crate::order_manager::local_order_manager;
+use crate::fsm::local_order_manager;
 use crate::order_manager::order_list;
 use serde;
 
@@ -50,7 +50,7 @@ pub enum Event {
     OnObstructionSignal { active: bool },
 }
 
-pub const DOOR_OPEN_TIME: u64 = 3;
+
 impl ElevatorInfo {
     pub fn get_id(&self) -> usize {
         return self.clone().id;
