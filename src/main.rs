@@ -37,11 +37,17 @@ struct CustomDataType {
 
 
 fn main() -> std::io::Result<()> {
-
+    // To run on a simulator port, call "cargo run PORT_TO_RUN_ON"
+    let args: Vec<String> = env::args().collect();
+    let mut server_port: String = "15657".to_string();
+    if args.len() > 1 {
+        server_port = args[1].clone();
+    }
+    let elev_hw_server: String = format!("{}:{}", "localhost", server_port);
 
 
     /*----------------SINGLE ELEVATOR---------------------*/
-    let elevator = e::ElevatorHW::init("localhost:15657", setting::ELEV_NUM_FLOORS)?;
+    let elevator = e::ElevatorHW::init(&elev_hw_server[..], setting::ELEV_NUM_FLOORS)?;
     println!("Elevator started:\n{:#?}", elevator);
 
     let (hardware_command_tx, hardware_command_rx) =
@@ -78,15 +84,18 @@ fn main() -> std::io::Result<()> {
     let mut fsm =
         fsm::elevatorfsm::Elevator::new(setting::ELEV_NUM_FLOORS, setting::ID, hardware_command_tx.clone(), door_timer_start_tx);
     
+    let (assign_orders_locally_tx, assign_orders_locally_rx) = cbc::unbounded::<CallButton>();
+
     // Global elevator info manager
     let (local_info_for_global_tx, local_info_for_global_rx) = cbc::unbounded::<fsm::elevatorfsm::ElevatorInfo>();
     let (remote_update_tx, remote_update_rx) = cbc::unbounded::<Vec<fsm::elevatorfsm::ElevatorInfo>>();
     let (global_info_tx, global_info_rx) = cbc::unbounded::<GlobalElevatorInfo>();
     let (global_info_for_assigner_tx,global_info_for_assigner_rx) = cbc::unbounded::<GlobalElevatorInfo>();
     let (global_info_for_lights_tx, global_info_for_lights_rx) = cbc::unbounded::<GlobalElevatorInfo>();
-    let (set_pending_tx, set_pending_rx) = cbc::unbounded::<(usize,CallButton)>();
+    let (set_pending_tx, set_pending_rx) = cbc::unbounded::<(bool,usize,CallButton)>();
     {
-        spawn(move || network::global_elevator::global_elevator_info(local_info_for_global_rx, remote_update_rx, set_pending_rx, global_info_tx));
+        let alc_tx = assign_orders_locally_tx.clone();
+        spawn(move || network::global_elevator::global_elevator_info(local_info_for_global_rx, remote_update_rx, set_pending_rx, global_info_tx, alc_tx));
     }
     local_info_for_global_tx.send(fsm.get_info());
     /*
@@ -95,7 +104,7 @@ fn main() -> std::io::Result<()> {
         spawn(move || network::global_elevator::set_order_lights(global_info_for_lights_rx, order_lights_tx));
     }
     */
-    let (assign_orders_locally_tx, assign_orders_locally_rx) = cbc::unbounded::<CallButton>();
+
     {
         spawn(move || {
             let mut old_lights: order_manager::order_list::OrderList = order_manager::order_list::OrderList::new(setting::ELEV_NUM_FLOORS);
@@ -149,26 +158,14 @@ fn main() -> std::io::Result<()> {
         spawn(move || elevio::poll::obstruction(elevator, obstruction_tx, poll_period));
     }
 
-    /*----------------METWWORK---------------------*/
-
-    // The sender for orders
-    let (order_send_tx, order_send_rx) = cbc::unbounded::<(usize, CallButton)>();
-    spawn(move || {
-        network::bcast::tx(setting::ORDER_PORT, order_send_rx,3);
-    });
-    // The reciever for orders
-    let (order_recv_tx, order_recv_rx) = cbc::unbounded::<(usize, CallButton)>();
-    spawn(move || {
-        network::bcast::rx(setting::ORDER_PORT, order_recv_tx);
-    });
-
+    /*----------------NETWORK---------------------*/
     // The sender for peer discovery
     let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
     let (elevator_info_tx, elevator_info_rx) = cbc::unbounded::<ElevatorInfo>();
     {
         //let id = id.clone();
         spawn(move || {
-            network::remote_elevator::local_elev_info_tx::<ElevatorInfo>(setting::PEER_PORT, elevator_info_rx, peer_tx_enable_rx);
+            network::remote_elevator::local_elev_info_tx::<ElevatorInfo>(elevator_info_rx, peer_tx_enable_rx);
         });
     }
     elevator_info_tx.send(fsm.get_info());
@@ -187,23 +184,16 @@ fn main() -> std::io::Result<()> {
 
     {
         let set_pending_transmitter = set_pending_tx.clone();
-        spawn(move || order_assigner::order_assigner(global_info_for_assigner_rx, call_button_rx, set_pending_transmitter, order_send_tx, assign_orders_locally_tx));
+        let local_order_assign_tx = assign_orders_locally_tx.clone();
+        spawn(move || order_assigner::order_transmitter(global_info_for_assigner_rx, call_button_rx, set_pending_transmitter, local_order_assign_tx));
+    }
+
+    {
+        spawn(move || order_assigner::order_receiver(assign_orders_locally_tx, set_pending_tx));
     }
 
     loop {
         cbc::select! {
-            recv(order_recv_rx) -> a => {
-                let order = a.unwrap();
-                let id = order.0;
-                let call_button = order.1;
-                if id == setting::ID {
-                    fsm.on_event(Event::OnNewOrder{btn: call_button});
-                    elevator_info_tx.send(fsm.get_info()).unwrap();
-                    local_info_for_global_tx.send(fsm.get_info()).unwrap();
-                } else {
-                    set_pending_tx.send((id, call_button));
-                }
-            },
             recv(assign_orders_locally_rx) -> a => {
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);

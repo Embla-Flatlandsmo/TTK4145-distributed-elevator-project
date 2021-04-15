@@ -78,9 +78,14 @@ impl OrderList {
     /// Sets the order corresponding to button to pending. 
     /// 
     /// **Note**: If the order is already active, the order will not be set to pending but remain active.
-    pub fn set_pending(&mut self, button: elevio::CallButton) {
+    pub fn set_pending(&mut self, should_set: bool, button: elevio::CallButton) {
         if self.get_order_status(button) != OrderType::Active {
-            self.modify_order(button, OrderType::Pending);
+            if should_set {
+                self.modify_order(button, OrderType::Pending);
+            } else {
+                self.modify_order(button, OrderType::None);
+            }
+
         }
     }
     /// Says if the order is pending

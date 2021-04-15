@@ -6,6 +6,7 @@ use std::time;
 use crate::network::bcast;
 use std::thread::*;
 use std::collections::HashMap;
+use crate::util::constants as setting;
 #[path = "./sock.rs"]
 mod sock;
 
@@ -16,14 +17,14 @@ pub struct RemoteElevatorUpdate {
     pub lost:   Vec<ElevatorInfo>,
 }
 
-pub fn local_elev_info_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std::marker::Send>(port: u16, elev_info: cbc::Receiver::<ElevatorInfo>, tx_enable: cbc::Receiver<bool>){
+pub fn local_elev_info_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std::marker::Send>(elev_info: cbc::Receiver::<ElevatorInfo>, tx_enable: cbc::Receiver<bool>){
 
     let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<ElevatorInfo>();
     {
     spawn(move || {
-        crate::network::bcast::tx(port, send_bcast_rx, 3);
+        crate::network::bcast::tx(setting::PEER_PORT, send_bcast_rx, 3);
     });
-}
+    }
     let mut enabled = true;
 
     let ticker = cbc::tick(time::Duration::from_millis(15));
@@ -74,6 +75,7 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_
         let mut new_elevator = false;
 
         // Find new peers transmitting elevator info
+        // TODO: Make this receiver use bcast::rx?
         match r {
             Ok(n) => {
                 let msg = std::str::from_utf8(&buf[..n]).unwrap();
