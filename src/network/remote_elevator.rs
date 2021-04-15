@@ -5,6 +5,8 @@ use std::time;
 use std::thread::*;
 use std::collections::HashMap;
 use crate::util::constants as setting;
+
+
 #[path = "./sock.rs"]
 mod sock;
 
@@ -51,7 +53,12 @@ pub fn local_elev_info_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std
     }
 }
 
-pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_update: cbc::Sender::<Vec<ElevatorInfo>>) {
+
+pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(
+    port: u16, 
+    elev_info_update: cbc::Sender::<Vec<ElevatorInfo>>,
+    cab_backup_channel: cbc::Sender::<ElevatorInfo>)
+    {
     let timeout = time::Duration::from_millis(500);
     let s = sock::new_rx(port).unwrap();
     s.set_read_timeout(Some(timeout)).unwrap();
@@ -67,10 +74,11 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_
         let mut peers = Vec::new();
         let mut lost = Vec::new();
         let mut new_elevator_id: usize = 0; //have to initialize with value
+        let mut new_elevator = false;
 
         let r = s.recv(&mut buf);
         let now = time::Instant::now();
-        let mut new_elevator = false;
+        
 
         // Find new peers transmitting elevator info
         // TODO: Make this receiver use bcast::rx?
@@ -84,6 +92,10 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_
                     new_elevator = true;
                     new_elevator_id = id.clone();
                 }
+
+                /*if (elev_info.clone() == active_peers.get(&id).clone()){
+                    modified = true;
+                }*/
 
                 match active_peers.get(&id).cloned() {
                     Some(existing_info) => {
@@ -104,7 +116,7 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_
         // Send cab calls to reconnecting node
         if new_elevator {
             if lost_peers.contains_key(&new_elevator_id.clone()){
-                //broadcast_cab_calls_to_new_elevator(id);
+                cab_backup_channel.send(active_peers.get(&new_elevator_id).unwrap().clone());
             }
         }    
 
@@ -132,3 +144,51 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_
 }
 
 
+
+pub fn cab_order_backup_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std::marker::Send>(elev_info: cbc::Receiver::<ElevatorInfo>){
+
+    let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<ElevatorInfo>();
+    {
+    spawn(move || {
+        crate::network::bcast::tx(setting::CAB_BACKUP_PORT, send_bcast_rx, 3);
+    });
+    }
+
+    let mut elevator: ElevatorInfo;
+    
+    loop {
+        cbc::select! {
+            recv(elev_info) -> new_info => {
+                elevator = new_info.unwrap();
+                send_bcast_tx.send(elevator.clone()).unwrap(); //cab_order_backup_rx on other nodes get this
+            }
+        }
+    }
+}
+
+pub fn cab_order_backup_rx<T: serde::de::DeserializeOwned>(port: u16, cab_order_backup: cbc::Sender::<ElevatorInfo>) {
+    let timeout = time::Duration::from_millis(500);
+    let s = sock::new_rx(port).unwrap();
+    s.set_read_timeout(Some(timeout)).unwrap();
+
+    let mut buf = [0; 1024];
+    loop{
+        let r = s.recv(&mut buf);
+
+         match r {
+            Ok(n) => {
+                let msg = std::str::from_utf8(&buf[..n]).unwrap();
+                let elev_info = serde_json::from_str::<ElevatorInfo>(&msg).unwrap();
+                let id = elev_info.clone().id;
+
+                if id == setting::ID{
+                    cab_order_backup.send(elev_info.clone()).unwrap();
+                    //return; should we run any more
+                }
+
+            }
+            Err(_e) => {},
+        }
+    }
+
+}

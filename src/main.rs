@@ -123,6 +123,7 @@ fn main() -> std::io::Result<()> {
         network::remote_elevator::remote_elev_info_rx::<Vec<ElevatorInfo>>(setting::PEER_PORT, remote_update_tx)
     );
 
+
     /* Transmit and receive orders from other elevators */
     {
         let set_pending_transmitter = set_pending_tx.clone();
@@ -133,6 +134,26 @@ fn main() -> std::io::Result<()> {
     {
         spawn(move || order_assigner::order_receiver(assign_orders_locally_tx, set_pending_tx));
     }
+
+
+
+    /*------------------CAB ORDER BACKUP---------------*/
+
+    /* Receive cab_order backup from remote elevators */
+    let (cab_order_receiver_tx, cab_order_receiver_rx) = cbc::unbounded::<ElevatorInfo>();
+    spawn(move || 
+        network::remote_elevator::cab_order_backup_rx::<Vec<ElevatorInfo>>(setting::CAB_BACKUP_PORT, cab_order_tx)
+    );
+
+    /*Transmit cab_order_backup to network*/
+    let (cab_order_transmitter_tx, cab_order_transmitter_rx) = cbc::unbounded::<ElevatorInfo>();
+    spawn(move || 
+        network::remote_elevator::cab_order_backup_tx::<Vec<ElevatorInfo>>(setting::CAB_BACKUP_PORT, cab_order_transmitter_rx)
+    );
+
+
+
+
     /*--------------------UTILITY---------------------*/
     // Forwarding messages to the appropriate channels (they need same info, but shouldn't steal messages from one another)
     spawn(move || {
