@@ -120,7 +120,7 @@ fn main() -> std::io::Result<()> {
 
     /* Receive elevator info from remote elevators */
     spawn(move || 
-        network::remote_elevator::remote_elev_info_rx::<Vec<ElevatorInfo>>(setting::PEER_PORT, remote_update_tx)
+        network::remote_elevator::remote_elev_info_rx::<Vec<ElevatorInfo>>(setting::PEER_PORT, remote_update_tx, cab_order_transmitter_tx)
     );
 
 
@@ -142,13 +142,13 @@ fn main() -> std::io::Result<()> {
     /* Receive cab_order backup from remote elevators */
     let (cab_order_receiver_tx, cab_order_receiver_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || 
-        network::remote_elevator::cab_order_backup_rx::<Vec<ElevatorInfo>>(setting::CAB_BACKUP_PORT, cab_order_tx)
+        network::remote_elevator::cab_order_backup_rx::<Vec<ElevatorInfo>>(setting::CAB_BACKUP_PORT, cab_order_receiver_tx)
     );
 
     /*Transmit cab_order_backup to network*/
     let (cab_order_transmitter_tx, cab_order_transmitter_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || 
-        network::remote_elevator::cab_order_backup_tx::<Vec<ElevatorInfo>>(setting::CAB_BACKUP_PORT, cab_order_transmitter_rx)
+        network::remote_elevator::cab_order_backup_tx::<ElevatorInfo>(cab_order_transmitter_rx)
     );
 
 
