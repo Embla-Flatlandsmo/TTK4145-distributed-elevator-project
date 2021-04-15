@@ -62,6 +62,7 @@ impl GlobalElevatorInfo {
         
         let mut fix_len_remote_elev_update = new_global_elev_info.clone();
         let prev_global_elev_info = self.get_global_elevators();
+        new_global_elev_info[self.local_id] = self.get_local_elevator_info();
         let mut lost_orders: Vec<CallButton> = Vec::new();
 
         for elev in remote_update.iter() {
@@ -70,9 +71,9 @@ impl GlobalElevatorInfo {
         
         println!("{:#?}", fix_len_remote_elev_update.clone());
         for i in 0..MAX_NUM_ELEV {
-            if i != ID {
-                let remote_info: ElevatorInfo;
-                let mut local_info: ElevatorInfo;
+            if i != self.local_id.clone() {
+                let mut remote_info: ElevatorInfo;
+                let local_info: ElevatorInfo;
                 match prev_global_elev_info[i].as_ref() {
                     None => {
                         new_global_elev_info[i] = fix_len_remote_elev_update[i].clone();
@@ -87,8 +88,8 @@ impl GlobalElevatorInfo {
                             },
                             Some(vr) => {
                                 remote_info = vr.clone();
-                                local_info.responsible_orders = merge_remote_orders(local_info.clone().responsible_orders.clone(), remote_info.clone().responsible_orders.clone());
-                                new_global_elev_info[i] = Some(local_info);
+                                remote_info.responsible_orders = merge_remote_orders(local_info.clone().responsible_orders.clone(), remote_info.clone().responsible_orders.clone());
+                                new_global_elev_info[i] = Some(remote_info);
                             }
                         }
                     }
@@ -377,14 +378,14 @@ mod test {
             state: State::Moving,
             dirn: DIRN_UP,
             floor: 3,
-            responsible_orders: OrderList::new(5),
+            responsible_orders: OrderList::new(ELEV_NUM_FLOORS),
         };
         let elev_id_1: ElevatorInfo = ElevatorInfo {
             id: 1,
             state: State::Moving,
             dirn: DIRN_DOWN,
             floor: 1,
-            responsible_orders: OrderList::new(5),
+            responsible_orders: OrderList::new(ELEV_NUM_FLOORS),
         };
         let mut remote_update: Vec<ElevatorInfo> = Vec::new();
         remote_update.push(elev_id_0);
@@ -394,8 +395,7 @@ mod test {
 
     #[test]
     fn it_updates_from_remote() {
-        let max_num_elev = 10;
-        let remote_update: Vec<ElevatorInfo> = create_random_remote_update(max_num_elev);
+        let remote_update: Vec<ElevatorInfo> = create_random_remote_update(MAX_NUM_ELEV);
         let local_elev_info: ElevatorInfo = ElevatorInfo {
             id: 2,
             state: State::Moving,
@@ -404,11 +404,11 @@ mod test {
             responsible_orders: OrderList::new(5),
         };
         let mut global_elevator_info: GlobalElevatorInfo =
-            GlobalElevatorInfo::new(local_elev_info, 10);
+            GlobalElevatorInfo::new(local_elev_info, MAX_NUM_ELEV);
         global_elevator_info.update_remote_elevator_info(remote_update.clone());
         let mut is_identical = true;
         for elev in remote_update.iter().cloned() {
-            let elev_id: usize = elev.id;
+            let elev_id: usize = elev.get_id();
             if elev
                 != global_elevator_info.get_global_elevators()[elev_id]
                     .clone()
@@ -444,7 +444,7 @@ mod test {
             state: State::Moving,
             dirn: DIRN_UP,
             floor: 3,
-            responsible_orders: OrderList::new(5),
+            responsible_orders: OrderList::new(ELEV_NUM_FLOORS),
         };
 
         let mut global_elevator_info: GlobalElevatorInfo =
@@ -455,8 +455,9 @@ mod test {
         remote_update[0]
             .responsible_orders
             .set_active(CallButton { floor: 2, call: 1 });
+        println!("{:#?}", remote_update[0].clone());
         global_elevator_info.update_remote_elevator_info(remote_update.clone());
-        assert!(!global_elevator_info.is_pending(0, CallButton { floor: 2, call: 1 }));
+        assert!(global_elevator_info.is_active(0, CallButton { floor: 2, call: 1 }));
     }
 
     #[test]
@@ -483,7 +484,7 @@ mod test {
 
         global_elevator_info.update_local_elevator_info(local_elev_info_2.clone());
         assert_eq!(
-            global_elevator_info.get_local_elevator_info(),
+            global_elevator_info.get_local_elevator_info().unwrap(),
             local_elev_info_2
         );
     }
@@ -511,14 +512,14 @@ mod test {
         let mut global_elevator_info: GlobalElevatorInfo =
             GlobalElevatorInfo::new(local_elev_info.clone(), 10);
         global_elevator_info.update_remote_elevator_info(remote_update);
-        assert_eq! {global_elevator_info.get_local_elevator_info(), local_elev_info}
+        assert_eq!(global_elevator_info.get_local_elevator_info().unwrap(), local_elev_info);
     }
 
     #[test]
     fn it_correctly_merges_remote_order_list() {
-        let mut order_list = OrderList::new(5);
-        order_list.set_pending(true, CallButton { floor: 4, call: 0 });
-        order_list.set_pending(true, CallButton { floor: 3, call: 2 });
+        let mut order_list = OrderList::new(ELEV_NUM_FLOORS);
+        order_list.set_pending(true, CallButton { floor: 3, call: 0 });
+        order_list.set_pending(true, CallButton { floor: 1, call: 2 });
         order_list.set_active(CallButton { floor: 0, call: 2 });
 
         // Check: Is merging the lists the same as adding orders?
@@ -526,11 +527,11 @@ mod test {
         order_list_to_compare.set_active(CallButton { floor: 1, call: 0 });
         order_list_to_compare.set_active(CallButton { floor: 0, call: 2 });
 
-        let mut order_list_update = OrderList::new(5);
+        let mut order_list_update = OrderList::new(ELEV_NUM_FLOORS);
         order_list_update.set_active(CallButton { floor: 1, call: 0 });
         order_list_update.set_active(CallButton { floor: 0, call: 2 });
 
-        order_list = merge_remote_orders(order_list, order_list_update.clone());
+        order_list = merge_remote_orders(order_list.clone(), order_list_update.clone());
         assert_eq!(order_list, order_list_to_compare);
     }
 }

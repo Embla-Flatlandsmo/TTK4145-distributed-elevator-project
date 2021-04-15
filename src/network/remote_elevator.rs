@@ -84,6 +84,16 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_
                     new_elevator = true;
                     new_elevator_id = id.clone();
                 }
+
+                match active_peers.get(&id).cloned() {
+                    Some(existing_info) => {
+                        if existing_info != elev_info.clone() {
+                            modified = true;
+                        }
+                    }
+                    None => {}
+                }
+
                 last_seen.insert(id.clone(), now);
                 active_peers.insert(id.clone(), elev_info.clone());
                 lost_peers.remove(&id.clone());
@@ -92,7 +102,7 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_
         }
 
         // Send cab calls to reconnecting node
-        if new_elevator{
+        if new_elevator {
             if lost_peers.contains_key(&new_elevator_id.clone()){
                 //broadcast_cab_calls_to_new_elevator(id);
             }
