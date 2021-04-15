@@ -168,7 +168,7 @@ mod test {
     #[test]
     fn it_correctly_detects_pending_order() {
         let mut order_list = OrderList::new(5);
-        order_list.set_pending(CallButton { floor: 4, call: 0 });
+        order_list.set_pending(true, CallButton { floor: 4, call: 0 });
         assert!(order_list.is_pending(CallButton { floor: 4, call: 0 }));
     }
 }

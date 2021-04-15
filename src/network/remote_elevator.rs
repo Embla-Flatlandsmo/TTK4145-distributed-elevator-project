@@ -1,9 +1,7 @@
 use crossbeam_channel as cbc;
 use serde;
 use crate::fsm::elevatorfsm::ElevatorInfo;
-use crate::fsm::elevatorfsm::Elevator;
 use std::time;
-use crate::network::bcast;
 use std::thread::*;
 use std::collections::HashMap;
 use crate::util::constants as setting;
@@ -43,7 +41,7 @@ pub fn local_elev_info_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std
             },
             recv(ticker) -> _ => {
                 if enabled {
-                    send_bcast_tx.send(local_info.clone());
+                    send_bcast_tx.send(local_info.clone()).unwrap();
                 }
             },
             recv(elev_info) -> new_info => {
@@ -90,7 +88,7 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(port: u16, elev_info_
                 active_peers.insert(id.clone(), elev_info.clone());
                 lost_peers.remove(&id.clone());
             }
-            Err(e) => {},
+            Err(_e) => {},
         }
 
         // Send cab calls to reconnecting node

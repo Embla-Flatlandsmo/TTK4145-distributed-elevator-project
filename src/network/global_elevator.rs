@@ -15,7 +15,7 @@ pub struct GlobalElevatorInfo {
 }
 
 impl GlobalElevatorInfo {
-    pub fn new(mut local_elev: ElevatorInfo, max_number_of_elevators: usize) -> GlobalElevatorInfo {
+    pub fn new(local_elev: ElevatorInfo, max_number_of_elevators: usize) -> GlobalElevatorInfo {
         let mut global_elevs: Vec<Option<ElevatorInfo>> = Vec::new();
         global_elevs.resize_with(max_number_of_elevators, || None);
         global_elevs[local_elev.clone().get_id()] = Some(local_elev.clone());
@@ -205,7 +205,7 @@ pub fn global_elevator_info(
                 //println!("{:#?}", global_info.clone());
                 //global_info_update.send(global_info.clone()).unwrap();
             },
-            recv(set_pending) -> (a) => {
+            recv(set_pending) -> a => {
                 let (should_set,id, btn) = a.unwrap();
                 global_info.set_to_pending(should_set, id, btn);
                 global_info_update.send(global_info.clone()).unwrap();
@@ -517,8 +517,8 @@ mod test {
     #[test]
     fn it_correctly_merges_remote_order_list() {
         let mut order_list = OrderList::new(5);
-        order_list.set_pending(CallButton { floor: 4, call: 0 });
-        order_list.set_pending(CallButton { floor: 3, call: 2 });
+        order_list.set_pending(true, CallButton { floor: 4, call: 0 });
+        order_list.set_pending(true, CallButton { floor: 3, call: 2 });
         order_list.set_active(CallButton { floor: 0, call: 2 });
 
         // Check: Is merging the lists the same as adding orders?

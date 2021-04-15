@@ -1,3 +1,6 @@
+use crossbeam_channel as cbc;
+use crate::util::constants as setting;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Timer {
     start_time: std::time::Instant,
@@ -41,6 +44,20 @@ impl Timer {
             return true;
         } else {
             return false;
+        }
+    }
+}
+
+pub fn run(door_timer_start_rx: cbc::Receiver<TimerCommand>, door_timeout_tx: cbc::Sender<()>) {
+    let mut door_timer: Timer = Timer::new(setting::DOOR_OPEN_TIME);
+    loop {
+        let r = door_timer_start_rx.try_recv();
+        match r {
+            Ok(r) => door_timer.on_command(r),
+            _ => {}
+        }
+        if door_timer.did_expire() {
+            door_timeout_tx.send(()).unwrap();
         }
     }
 }
