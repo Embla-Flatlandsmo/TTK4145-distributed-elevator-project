@@ -8,14 +8,18 @@ use util::constants as setting;
 
 use elevio::elev as e;
 use fsm::door_timer;
-use fsm::elevatorfsm::Event;
+use fsm::elevatorfsm::{Elevator, Event, ElevatorInfo, State};
 use network::global_elevator::GlobalElevatorInfo;
 use elevio::poll::CallButton;
 
 use order_assigner::order_assigner;
-use crate::fsm::elevatorfsm::ElevatorInfo;
 
 fn main() -> std::io::Result<()> {
+    if setting::ID > setting::MAX_NUM_ELEV {
+        panic!("Trying to start an elevator with an ID that is too high. Consider increasing MAX_NUM_ELEV in util/constants.rs");
+    }
+
+    println!("Elevator started with local ID: {}", setting::ID);
     // To run on a simulator port, call "cargo run PORT_TO_RUN_ON"
     let args: Vec<String> = env::args().collect();
     let mut server_port: String = "15657".to_string();
@@ -105,7 +109,7 @@ fn main() -> std::io::Result<()> {
     let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
     /* Transmit local elevator info on network */
     let (local_elev_info_to_transmit_tx, local_elev_info_to_transmit_rx) = cbc::unbounded::<ElevatorInfo>();
-    spawn(move || 
+    let thread_remote_elev_rx = spawn(move || 
             network::remote_elevator::local_elev_info_tx::<ElevatorInfo>(local_elev_info_to_transmit_rx, peer_tx_enable_rx)
         );
     local_elev_info_to_transmit_tx.send(fsm.get_info()).unwrap();
@@ -119,6 +123,7 @@ fn main() -> std::io::Result<()> {
     });*/
 
     /* Receive elevator info from remote elevators */
+    let (cab_order_transmitter_tx, cab_order_transmitter_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || 
         network::remote_elevator::remote_elev_info_rx::<Vec<ElevatorInfo>>(setting::PEER_PORT, remote_update_tx, cab_order_transmitter_tx)
     );
@@ -132,21 +137,20 @@ fn main() -> std::io::Result<()> {
     }
 
     {
-        spawn(move || order_assigner::order_receiver(assign_orders_locally_tx, set_pending_tx));
+        let local_order_assign_tx = assign_orders_locally_tx.clone();
+        spawn(move || order_assigner::order_receiver(local_order_assign_tx, set_pending_tx));
     }
-
 
 
     /*------------------CAB ORDER BACKUP---------------*/
 
     /* Receive cab_order backup from remote elevators */
-    let (cab_order_receiver_tx, cab_order_receiver_rx) = cbc::unbounded::<ElevatorInfo>();
+
     spawn(move || 
-        network::remote_elevator::cab_order_backup_rx::<Vec<ElevatorInfo>>(setting::CAB_BACKUP_PORT, cab_order_receiver_tx)
+        network::remote_elevator::cab_order_backup_rx::<Vec<ElevatorInfo>>(setting::CAB_BACKUP_PORT, assign_orders_locally_tx)
     );
 
     /*Transmit cab_order_backup to network*/
-    let (cab_order_transmitter_tx, cab_order_transmitter_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || 
         network::remote_elevator::cab_order_backup_tx::<ElevatorInfo>(cab_order_transmitter_rx)
     );
@@ -175,16 +179,26 @@ fn main() -> std::io::Result<()> {
         });
 
     /*----------------LOOP FOR LOCAL ELEVATOR INPUT---------------------*/
+
+
+    //let elevator_malfunction_timeout = time::Duration::from_secs(10);
+    //let mut checkpoint_time = time::Instant::now();
+
     loop {
         cbc::select! {
             recv(assign_orders_locally_rx) -> a => {
                 let call_button = a.unwrap();
                 println!("{:#?}", call_button);
                 fsm.on_event(Event::OnNewOrder{btn: call_button});
+                if fsm.get_state() == State::Moving {
+                    checkpoint_time = time::Instant::now();
+                }
                 local_elev_info_tx.send(fsm.get_info()).unwrap();         
             },
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
+                peer_tx_enable_tx.send(true);
+                checkpoint_time = time::Instant::now();
                 fsm.on_event(Event::OnFloorArrival{floor: floor});
                 println!("Floor: {:#?}", floor);
                 local_elev_info_tx.send(fsm.get_info()).unwrap();
@@ -195,15 +209,50 @@ fn main() -> std::io::Result<()> {
             },
             recv(obstruction_rx) -> a => {
                 let obstr = a.unwrap();
+                peer_tx_enable_tx.send(true);
                 fsm.on_event(Event::OnObstructionSignal{active: obstr});
+                /*
+                if fsm.get_state() == State::Obstructed {
+                    {
+                        let peer_transmit_tx = peer_tx_enable_tx.clone()
+                        spawn(move || {
+                            sleep(std::time::Duration::from_secs(1))
+                            peer_tx_enable_tx.send(false);
+                            sleep(std::time::Duration::from_secs(1))
+                            peer_tx_enable_tx.send(true);
+                        })
+                    }
+                }
+                */
                 local_elev_info_tx.send(fsm.get_info()).unwrap();
             },
             recv(door_timeout_rx) -> a => {
-                a.unwrap();
                 fsm.on_event(Event::OnDoorTimeOut);
+                peer_tx_enable_tx.send(true);
                 local_elev_info_tx.send(fsm.get_info()).unwrap();
-            },
+            }
+            /*
+            recv(state_changed_rx) -> a => {
+                if(state == moving){
+                    start_timer;
+                }
+                else{
+                    set timer to null;
+                }
+
+                if time::Instant::now().duration_since(last_state_changed_time) {
+
+                }
+                last_state_changed_time = time::Instant::now();
+            } */
         }
+        /*
+        if time::Instant::now().duration_since(checkpoint_time) > elevator_malfunction_timeout {
+            if fsm.get_state() == State::Moving || fsm.get_state() == State::Obstructed {
+                peer_tx_enable_tx.send(false);
+            }
+        }
+        */
     }
 }
 

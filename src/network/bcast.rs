@@ -18,7 +18,7 @@ pub fn tx<T: Clone + serde::Serialize>(port: u16, ch: cbc::Receiver<T>, burst_si
             let res = s.send(serialized.as_bytes());
             match res {
                 Ok(_res) => {},
-                Err(_res) => {println!("Couldn't send bcast");}
+                Err(_res) => {println!("Couldn't send bcast :(((((");}
             }
         }
     }
@@ -34,7 +34,7 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, ch: cbc::Sender<T>){
         // Only send the message on crossbeam channel if it actually is the data we want
         match serde_json::from_str::<T>(&msg) {
             Ok(data) => ch.send(data).unwrap(),
-            _ => {}
+            _ => {println!("Wrong data type!!!!")}
         }
     }
 }
