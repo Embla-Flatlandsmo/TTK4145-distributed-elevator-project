@@ -6,13 +6,15 @@ use crossbeam_channel as cbc;
 
 use util::constants as setting;
 
-use elevio::elev as e;
-use fsm::door_timer;
-use fsm::elevatorfsm::{Elevator, Event, ElevatorInfo, State};
-use network::global_elevator::GlobalElevatorInfo;
-use elevio::poll::CallButton;
+use local_elevator::elevio::elev as e;
+use local_elevator::elevio::poll as iopoll;
+use local_elevator::fsm::door_timer;
+use local_elevator::fsm::elevatorfsm::{Elevator, Event, ElevatorInfo, State};
+use global_elevator_info::connected_elevators::ConnectedElevatorInfo;
+use local_elevator::elevio::poll::CallButton;
 
-use order_assigner::order_assigner;
+use order_assigner::order_receiver;
+use order_assigner::order_transmitter;
 
 fn main() -> std::io::Result<()> {
     if setting::ID > setting::MAX_NUM_ELEV {
@@ -35,28 +37,28 @@ fn main() -> std::io::Result<()> {
 
     /* Initialization of hardware polling */
     let poll_period = time::Duration::from_millis(25);
-    let (call_button_tx, call_button_rx) = cbc::unbounded::<elevio::poll::CallButton>();
+    let (call_button_tx, call_button_rx) = cbc::unbounded::<CallButton>();
     {
         let elevator = elevator.clone();
-        spawn(move || elevio::poll::call_buttons(elevator, call_button_tx, poll_period));
+        spawn(move || local_elevator::elevio::poll::call_buttons(elevator, call_button_tx, poll_period));
     }
 
     let (floor_sensor_tx, floor_sensor_rx) = cbc::unbounded::<u8>();
     {
         let elevator = elevator.clone();
-        spawn(move || elevio::poll::floor_sensor(elevator, floor_sensor_tx, poll_period));
+        spawn(move || local_elevator::elevio::poll::floor_sensor(elevator, floor_sensor_tx, poll_period));
     }
 
     let (stop_button_tx, stop_button_rx) = cbc::unbounded::<bool>();
     {
         let elevator = elevator.clone();
-        spawn(move || elevio::poll::stop_button(elevator, stop_button_tx, poll_period));
+        spawn(move || local_elevator::elevio::poll::stop_button(elevator, stop_button_tx, poll_period));
     }
 
     let (obstruction_tx, obstruction_rx) = cbc::unbounded::<bool>();
     {
         let elevator = elevator.clone();
-        spawn(move || elevio::poll::obstruction(elevator, obstruction_tx, poll_period));
+        spawn(move || local_elevator::elevio::poll::obstruction(elevator, obstruction_tx, poll_period));
     }    
 
     /* Thread that keeps track of the local elevator door timer */
@@ -67,9 +69,9 @@ fn main() -> std::io::Result<()> {
     });
 
     /* Initialization of the local elevator fsm */
-    let (hardware_command_tx, hardware_command_rx) = cbc::unbounded::<elevio::elev::HardwareCommand>();
+    let (hardware_command_tx, hardware_command_rx) = cbc::unbounded::<e::HardwareCommand>();
     let mut fsm =
-        fsm::elevatorfsm::Elevator::new(setting::ELEV_NUM_FLOORS, setting::ID, hardware_command_tx.clone(), door_timer_start_tx);
+        local_elevator::fsm::elevatorfsm::Elevator::new(setting::ELEV_NUM_FLOORS, setting::ID, hardware_command_tx.clone(), door_timer_start_tx);
     let (local_elev_info_tx, local_elev_info_rx) = cbc::unbounded::<ElevatorInfo>();
     let (assign_orders_locally_tx, assign_orders_locally_rx) = cbc::unbounded::<CallButton>();
 
@@ -86,21 +88,21 @@ fn main() -> std::io::Result<()> {
     }
 
     // Global elevator info manager
-    let (local_info_for_global_tx, local_info_for_global_rx) = cbc::unbounded::<fsm::elevatorfsm::ElevatorInfo>();
-    let (remote_update_tx, remote_update_rx) = cbc::unbounded::<Vec<fsm::elevatorfsm::ElevatorInfo>>();
-    let (global_info_tx, global_info_rx) = cbc::unbounded::<GlobalElevatorInfo>();
-    let (global_info_for_assigner_tx,global_info_for_assigner_rx) = cbc::unbounded::<GlobalElevatorInfo>();
-    let (global_info_for_lights_tx, global_info_for_lights_rx) = cbc::unbounded::<GlobalElevatorInfo>();
+    let (local_info_for_global_tx, local_info_for_global_rx) = cbc::unbounded::<local_elevator::fsm::elevatorfsm::ElevatorInfo>();
+    let (remote_update_tx, remote_update_rx) = cbc::unbounded::<Vec<local_elevator::fsm::elevatorfsm::ElevatorInfo>>();
+    let (connected_info_tx, connected_info_rx) = cbc::unbounded::<ConnectedElevatorInfo>();
+    let (connected_info_for_assigner_tx,connected_info_for_assigner_rx) = cbc::unbounded::<ConnectedElevatorInfo>();
+    let (connected_info_for_lights_tx, connected_info_for_lights_rx) = cbc::unbounded::<ConnectedElevatorInfo>();
     let (set_pending_tx, set_pending_rx) = cbc::unbounded::<(bool,usize,CallButton)>();
     {
         let alc_tx = assign_orders_locally_tx.clone();
-        spawn(move || network::global_elevator::global_elevator_info(local_info_for_global_rx, remote_update_rx, set_pending_rx, global_info_tx, alc_tx));
+        spawn(move || global_elevator_info::connected_elevators::connected_elevator_info(local_info_for_global_rx, remote_update_rx, set_pending_rx, connected_info_tx, alc_tx));
     }
     local_info_for_global_tx.send(fsm.get_info()).unwrap();
     
     {
         let order_lights_tx = hardware_command_tx.clone();
-        spawn(move || network::global_elevator::set_order_lights(global_info_for_lights_rx, order_lights_tx));
+        spawn(move || global_elevator_info::connected_elevators::set_order_lights(connected_info_for_lights_rx, order_lights_tx));
     }
     
 
@@ -110,7 +112,7 @@ fn main() -> std::io::Result<()> {
     /* Transmit local elevator info on network */
     let (local_elev_info_to_transmit_tx, local_elev_info_to_transmit_rx) = cbc::unbounded::<ElevatorInfo>();
     let thread_remote_elev_rx = spawn(move || 
-            network::remote_elevator::local_elev_info_tx::<ElevatorInfo>(local_elev_info_to_transmit_rx, peer_tx_enable_rx)
+            global_elevator_info::elev_info_updater::local_elev_info_tx::<ElevatorInfo>(local_elev_info_to_transmit_rx, peer_tx_enable_rx)
         );
     local_elev_info_to_transmit_tx.send(fsm.get_info()).unwrap();
 
@@ -125,7 +127,7 @@ fn main() -> std::io::Result<()> {
     /* Receive elevator info from remote elevators */
     let (cab_order_transmitter_tx, cab_order_transmitter_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || 
-        network::remote_elevator::remote_elev_info_rx::<Vec<ElevatorInfo>>(setting::PEER_PORT, remote_update_tx, cab_order_transmitter_tx)
+        global_elevator_info::elev_info_updater::remote_elev_info_rx::<Vec<ElevatorInfo>>(setting::PEER_PORT, remote_update_tx, cab_order_transmitter_tx)
     );
 
 
@@ -133,12 +135,12 @@ fn main() -> std::io::Result<()> {
     {
         let set_pending_transmitter = set_pending_tx.clone();
         let local_order_assign_tx = assign_orders_locally_tx.clone();
-        spawn(move || order_assigner::order_transmitter(global_info_for_assigner_rx, call_button_rx, set_pending_transmitter, local_order_assign_tx));
+        spawn(move || order_assigner::order_transmitter::hall_order_transmitter(connected_info_for_assigner_rx, call_button_rx, set_pending_transmitter, local_order_assign_tx));
     }
 
     {
         let local_order_assign_tx = assign_orders_locally_tx.clone();
-        spawn(move || order_assigner::order_receiver(local_order_assign_tx, set_pending_tx));
+        spawn(move || order_assigner::order_receiver::hall_order_receiver(local_order_assign_tx, set_pending_tx));
     }
 
 
@@ -147,12 +149,12 @@ fn main() -> std::io::Result<()> {
     /* Receive cab_order backup from remote elevators */
 
     spawn(move || 
-        network::remote_elevator::cab_order_backup_rx::<Vec<ElevatorInfo>>(setting::CAB_BACKUP_PORT, assign_orders_locally_tx)
+        order_assigner::order_receiver::cab_order_backup_rx::<Vec<ElevatorInfo>>(setting::CAB_BACKUP_PORT, assign_orders_locally_tx)
     );
 
     /*Transmit cab_order_backup to network*/
     spawn(move || 
-        network::remote_elevator::cab_order_backup_tx::<ElevatorInfo>(cab_order_transmitter_rx)
+        order_assigner::order_transmitter::cab_order_backup_tx::<ElevatorInfo>(cab_order_transmitter_rx)
     );
 
 
@@ -163,10 +165,10 @@ fn main() -> std::io::Result<()> {
     spawn(move || {
         loop {
             cbc::select!{
-                recv(global_info_rx) -> a => {
+                recv(connected_info_rx) -> a => {
                     let glob_info = a.unwrap();
-                    global_info_for_assigner_tx.send(glob_info.clone()).unwrap();
-                    global_info_for_lights_tx.send(glob_info.clone()).unwrap();
+                    connected_info_for_assigner_tx.send(glob_info.clone()).unwrap();
+                    connected_info_for_lights_tx.send(glob_info.clone()).unwrap();
 
                 },
                 recv(local_elev_info_rx) -> a => {
@@ -191,14 +193,14 @@ fn main() -> std::io::Result<()> {
                 println!("{:#?}", call_button);
                 fsm.on_event(Event::OnNewOrder{btn: call_button});
                 if fsm.get_state() == State::Moving {
-                    checkpoint_time = time::Instant::now();
+                    //checkpoint_time = time::Instant::now();
                 }
                 local_elev_info_tx.send(fsm.get_info()).unwrap();         
             },
             recv(floor_sensor_rx) -> a => {
                 let floor = a.unwrap();
                 peer_tx_enable_tx.send(true);
-                checkpoint_time = time::Instant::now();
+                //checkpoint_time = time::Instant::now();
                 fsm.on_event(Event::OnFloorArrival{floor: floor});
                 println!("Floor: {:#?}", floor);
                 local_elev_info_tx.send(fsm.get_info()).unwrap();

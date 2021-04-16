@@ -1,15 +1,15 @@
-use crate::network::global_elevator::GlobalElevatorInfo;
-use crate::elevio::poll::{CallButton, CAB};
+use crate::network::connected_elevators::ConnectedElevatorInfo;
+use crate::local_elevator::elevio::poll::{CallButton, CAB};
 use crossbeam_channel as cbc;
 use crate::util::constants as setting;
 use std::thread::*;
 /*
-pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
+pub fn order_transmitter(global_info_ch: cbc::Receiver<ConnectedElevatorInfo>,
     call_button_recv: cbc::Receiver<CallButton>,
     set_pending: cbc::Sender<(bool, usize, CallButton)>,
     assign_order_locally: cbc::Sender<CallButton>) {
 
-    let mut global_elevator_info: GlobalElevatorInfo;
+    let mut connected_elevator_info: ConnectedElevatorInfo;
     let (check_if_active_tx, check_if_active_rx) = cbc::unbounded::<(usize, CallButton)>();
     
     let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<(usize, CallButton)>();
@@ -22,13 +22,13 @@ pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
 
     cbc::select!{
         recv(global_info_ch) -> a => {
-            global_elevator_info = a.unwrap();
+            connected_elevator_info = a.unwrap();
         }
     }
     loop {
         cbc::select!{
             recv(global_info_ch) -> a => {
-                global_elevator_info = a.unwrap();
+                connected_elevator_info = a.unwrap();
             },
             recv(call_button_recv) -> a => {
 
@@ -39,7 +39,7 @@ pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
                     assign_order_locally.send(call_button).unwrap();
                 }
                 else {
-                    let lowest_cost_id = global_elevator_info.find_lowest_cost_id(call_button);
+                    let lowest_cost_id = connected_elevator_info.find_lowest_cost_id(call_button);
                     if lowest_cost_id == setting::ID {
                         assign_order_locally.send(call_button).unwrap();
                     }
@@ -56,7 +56,7 @@ pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
             },
             recv(check_if_active_rx) -> a => {
                 let (id, button) = a.unwrap();
-                if !global_elevator_info.is_active(id, button) {
+                if !connected_elevator_info.is_active(id, button) {
                     assign_order_locally.send(button).unwrap();
                     set_pending.send((false, id, button)).unwrap();
                 }

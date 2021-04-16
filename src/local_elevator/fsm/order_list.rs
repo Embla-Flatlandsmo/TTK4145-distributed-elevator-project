@@ -1,6 +1,6 @@
 //! Fast and easy order management to be used for both local and global queues!
 #![allow(dead_code)]
-use crate::elevio::poll as elevio;
+use crate::local_elevator::elevio::poll as elevio;
 use serde;
 use std::vec::Vec;
 
@@ -121,7 +121,7 @@ impl OrderList {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::elevio::poll::CallButton;
+    use crate::local_elevator::elevio::poll::CallButton;
     #[test]
     fn it_correctly_adds_orders() {
         let mut order_list = OrderList::new(5);

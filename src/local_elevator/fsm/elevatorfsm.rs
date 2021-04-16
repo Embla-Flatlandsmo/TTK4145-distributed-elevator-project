@@ -1,11 +1,11 @@
 #![allow(dead_code)]
-use crate::elevio::elev as elevio;
-use crate::elevio::poll;
-use crate::fsm::local_order_manager;
-use crate::order_manager::order_list;
+use crate::local_elevator::elevio::elev as elevio;
+use crate::local_elevator::elevio::poll;
+use crate::local_elevator::fsm::direction_decider;
+use crate::local_elevator::fsm::order_list;
 use serde;
 
-use crate::fsm::door_timer::TimerCommand;
+use crate::local_elevator::fsm::door_timer::TimerCommand;
 
 use crossbeam_channel as cbc;
 
@@ -131,7 +131,7 @@ impl Elevator {
                     .send(elevio::HardwareCommand::DoorLight { on: false })
                     .unwrap();
                 self.info.responsible_orders.clear_orders_on_floor(self.get_floor());
-                let new_dirn: u8 = local_order_manager::choose_direction(self);
+                let new_dirn: u8 = direction_decider::choose_direction(self);
                 hw_tx
                     .send(elevio::HardwareCommand::MotorDirection { dirn: new_dirn })
                     .unwrap();
@@ -154,7 +154,7 @@ impl Elevator {
             .unwrap();
         match state {
             State::Moving => {
-                if local_order_manager::should_stop(self) {
+                if direction_decider::should_stop(self) {
                     self.hw_tx
                         .send(elevio::HardwareCommand::MotorDirection {
                             dirn: elevio::DIRN_STOP,
@@ -208,7 +208,7 @@ impl Elevator {
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
                     self.info.state = State::DoorOpen;
                 } else {
-                    let new_dirn: u8 = local_order_manager::choose_direction(self);
+                    let new_dirn: u8 = direction_decider::choose_direction(self);
                     self.hw_tx
                         .send(elevio::HardwareCommand::MotorDirection { dirn: new_dirn })
                         .unwrap();

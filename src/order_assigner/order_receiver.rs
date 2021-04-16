@@ -1,14 +1,18 @@
-use crate::network::global_elevator::GlobalElevatorInfo;
-use crate::elevio::poll::{CallButton, CAB};
-use crossbeam_channel as cbc;
-use crate::util::constants as setting;
 use std::thread::*;
+use std::time;
+use crossbeam_channel as cbc;
 
-pub fn order_receiver(assign_orders_locally_tx: cbc::Sender<CallButton>, set_pending_tx: cbc::Sender<(bool, usize, CallButton)>) {
+use crate::global_elevator_info::connected_elevators::ConnectedElevatorInfo;
+use crate::local_elevator::elevio::poll::{CallButton, CAB};
+use crate::local_elevator::fsm::elevatorfsm::ElevatorInfo;
+
+use crate::util::constants as setting;
+
+pub fn hall_order_receiver(assign_orders_locally_tx: cbc::Sender<CallButton>, set_pending_tx: cbc::Sender<(bool, usize, CallButton)>) {
     // The reciever for orders
     let (order_recv_tx, order_recv_rx) = cbc::unbounded::<(usize, CallButton)>();
     spawn(move || {
-        crate::network::bcast::rx(setting::ORDER_PORT, order_recv_tx);
+        crate::network_interface::bcast::rx(setting::ORDER_PORT, order_recv_tx);
     });
 
     loop {
@@ -31,7 +35,7 @@ pub fn cab_order_backup_rx<T: serde::de::DeserializeOwned>(port: u16, assign_cab
 
     let (cab_backup_recv_tx, cab_backup_recv_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || {
-        crate::network::bcast::rx(setting::CAB_BACKUP_PORT, cab_backup_recv_tx);
+        crate::network_interface::bcast::rx(setting::CAB_BACKUP_PORT, cab_backup_recv_tx);
     });
 
     while time::Instant::now().duration_since(start_time)<time::Duration::from_millis(5000){

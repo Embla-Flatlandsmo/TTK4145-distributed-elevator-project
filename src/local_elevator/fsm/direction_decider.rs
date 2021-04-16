@@ -1,6 +1,6 @@
-use crate::order_manager::order_list::{OrderList, OrderType};
-use crate::elevio::elev::{DIRN_DOWN, DIRN_STOP, DIRN_UP};
-use crate::fsm::elevatorfsm::Elevator;
+use crate::local_elevator::fsm::order_list::{OrderList, OrderType};
+use crate::local_elevator::elevio::elev::{DIRN_DOWN, DIRN_STOP, DIRN_UP};
+use crate::local_elevator::fsm::elevatorfsm::Elevator;
 
 pub fn choose_direction(fsm: &mut Elevator) -> u8 {
     let dirn = fsm.get_dirn();
@@ -100,7 +100,7 @@ fn single_queue_order_above(queue: &[OrderType], floor: usize) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::elevio::poll::CallButton;
+    use crate::local_elevator::elevio::poll::CallButton;
 
     #[test]
     fn it_finds_order_above() {

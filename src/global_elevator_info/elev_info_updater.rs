@@ -1,15 +1,11 @@
 use crossbeam_channel as cbc;
 use serde;
-use crate::fsm::elevatorfsm::ElevatorInfo;
+use crate::local_elevator::fsm::elevatorfsm::ElevatorInfo;
 use std::time;
 use std::thread::*;
 use std::collections::HashMap;
 use crate::util::constants as setting;
-use crate::elevio::poll::{CallButton, CAB};
-
-
-#[path = "./sock.rs"]
-mod sock;
+use crate::local_elevator::elevio::poll::{CallButton, CAB};
 
 #[derive(Debug, Clone)]
 pub struct RemoteElevatorUpdate {
@@ -23,7 +19,7 @@ pub fn local_elev_info_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std
     let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<ElevatorInfo>();
     {
     spawn(move || {
-        crate::network::bcast::tx(setting::PEER_PORT, send_bcast_rx, 3);
+        crate::network_interface::bcast::tx(setting::PEER_PORT, send_bcast_rx, 3);
     });
     }
     let mut enabled = true;
@@ -66,7 +62,7 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(
     
     let (elev_info_recv_tx, elev_info_recv_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || {
-        crate::network::bcast::rx(setting::PEER_PORT, elev_info_recv_tx);
+        crate::network_interface::bcast::rx(setting::PEER_PORT, elev_info_recv_tx);
     });
 
     let mut last_seen: HashMap<usize, time::Instant> = HashMap::new();

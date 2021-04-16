@@ -1,27 +1,27 @@
-use crate::elevio::poll::{CallButton, CAB};
-use crate::elevio::elev::HardwareCommand;
-use crate::fsm::elevatorfsm::ElevatorInfo;
+use crate::local_elevator::elevio::poll::{CallButton, CAB};
+use crate::local_elevator::elevio::elev::HardwareCommand;
+use crate::local_elevator::fsm::elevatorfsm::ElevatorInfo;
 use crate::order_assigner::cost_function;
-use crate::order_manager::order_list::{OrderList, OrderType};
+use crate::local_elevator::fsm::order_list::{OrderList, OrderType};
 use crossbeam_channel as cbc;
 use std::time;
 use crate::util::constants::{MAX_NUM_ELEV, ELEV_NUM_FLOORS, ID};
 use std::thread::*;
 
 #[derive(Clone, Debug)]
-pub struct GlobalElevatorInfo {
+pub struct ConnectedElevatorInfo {
     local_id: usize,
-    global_elevators: Vec<Option<ElevatorInfo>>,
+    connected_elevators: Vec<Option<ElevatorInfo>>,
 }
 
-impl GlobalElevatorInfo {
-    pub fn new(local_elev: ElevatorInfo, max_number_of_elevators: usize) -> GlobalElevatorInfo {
-        let mut global_elevs: Vec<Option<ElevatorInfo>> = Vec::new();
-        global_elevs.resize_with(max_number_of_elevators, || None);
-        global_elevs[local_elev.clone().get_id()] = Some(local_elev.clone());
-        GlobalElevatorInfo {
+impl ConnectedElevatorInfo {
+    pub fn new(local_elev: ElevatorInfo, max_number_of_elevators: usize) -> ConnectedElevatorInfo {
+        let mut connected_elevs: Vec<Option<ElevatorInfo>> = Vec::new();
+        connected_elevs.resize_with(max_number_of_elevators, || None);
+        connected_elevs[local_elev.clone().get_id()] = Some(local_elev.clone());
+        ConnectedElevatorInfo {
             local_id: local_elev.get_id(),
-            global_elevators: global_elevs,
+            connected_elevators: connected_elevs,
         }
     }
 
@@ -39,7 +39,7 @@ impl GlobalElevatorInfo {
             cost_function::time_to_idle(local_elev_info, btn);
         let mut lowest_cost_id: usize = self.local_id;
 
-        for i in self.global_elevators.iter().cloned() {
+        for i in self.connected_elevators.iter().cloned() {
             let mut elev_cost: usize = usize::MAX;
             match i.clone() {
                 Some(val) => {
@@ -57,12 +57,12 @@ impl GlobalElevatorInfo {
 
     /// Updates global info with the newest info received from remote elevators.
     pub fn update_remote_elevator_info(&mut self, remote_update: Vec<ElevatorInfo>) -> Vec<CallButton> {
-        let mut new_global_elev_info: Vec<Option<ElevatorInfo>> = Vec::new();
-        new_global_elev_info.resize_with(MAX_NUM_ELEV, || None);
+        let mut new_connected_elev_info: Vec<Option<ElevatorInfo>> = Vec::new();
+        new_connected_elev_info.resize_with(MAX_NUM_ELEV, || None);
         
-        let mut fix_len_remote_elev_update = new_global_elev_info.clone();
-        let prev_global_elev_info = self.get_global_elevators();
-        new_global_elev_info[self.local_id] = self.get_local_elevator_info();
+        let mut fix_len_remote_elev_update = new_connected_elev_info.clone();
+        let prev_connected_elev_info = self.get_connected_elevators();
+        new_connected_elev_info[self.local_id] = self.get_local_elevator_info();
         let mut lost_orders: Vec<CallButton> = Vec::new();
 
         for elev in remote_update.iter() {
@@ -74,49 +74,49 @@ impl GlobalElevatorInfo {
             if i != self.local_id.clone() {
                 let mut remote_info: ElevatorInfo;
                 let local_info: ElevatorInfo;
-                match prev_global_elev_info[i].as_ref() {
+                match prev_connected_elev_info[i].as_ref() {
                     None => {
-                        new_global_elev_info[i] = fix_len_remote_elev_update[i].clone();
+                        new_connected_elev_info[i] = fix_len_remote_elev_update[i].clone();
                     },
                     Some(vl) => {
                         local_info = vl.clone();
                         match fix_len_remote_elev_update[i].as_ref() {
                             None => {
                                 lost_orders.append(&mut assign_orders_locally(local_info.responsible_orders));
-                                new_global_elev_info[i] = None;
+                                new_connected_elev_info[i] = None;
                                 
                             },
                             Some(vr) => {
                                 remote_info = vr.clone();
                                 remote_info.responsible_orders = merge_remote_orders(local_info.clone().responsible_orders.clone(), remote_info.clone().responsible_orders.clone());
-                                new_global_elev_info[i] = Some(remote_info);
+                                new_connected_elev_info[i] = Some(remote_info);
                             }
                         }
                     }
                 }
             }
         }
-        self.global_elevators = new_global_elev_info;
+        self.connected_elevators = new_connected_elev_info;
         return lost_orders;
     }
 
     pub fn update_local_elevator_info(&mut self, local_update: ElevatorInfo) {
-        self.global_elevators[self.local_id] = Some(local_update);
+        self.connected_elevators[self.local_id] = Some(local_update);
     }
 
     pub fn set_to_pending(&mut self, should_set: bool, id: usize, button: CallButton) {
         let mut elev_info: ElevatorInfo;
-        match self.global_elevators[id].as_ref() {
+        match self.connected_elevators[id].as_ref() {
             Some(v) => elev_info = v.clone(),
             None => return,
         }
         elev_info.responsible_orders.set_pending(should_set, button);
-        self.global_elevators[id] = Some(elev_info);
+        self.connected_elevators[id] = Some(elev_info);
     }
 
     pub fn is_pending(&self, id: usize, button: CallButton) -> bool {
         let elev_info: ElevatorInfo;
-        match self.global_elevators[id].as_ref() {
+        match self.connected_elevators[id].as_ref() {
             Some(v) => elev_info = v.clone(),
             None => return false,
         }
@@ -125,7 +125,7 @@ impl GlobalElevatorInfo {
 
     pub fn is_active(&self, id: usize, button: CallButton) -> bool {
         let elev_info: ElevatorInfo;
-        match self.global_elevators[id].as_ref() {
+        match self.connected_elevators[id].as_ref() {
             Some(v) => elev_info = v.clone(),
             None => return false,
         }
@@ -134,7 +134,7 @@ impl GlobalElevatorInfo {
 
     pub fn get_orders_for_lights(&self) -> OrderList {
         let mut order_lights: OrderList = OrderList::new(ELEV_NUM_FLOORS);
-        for entry in self.global_elevators.iter().cloned() {
+        for entry in self.connected_elevators.iter().cloned() {
             match entry {
                 Some(elev) => {
                     order_lights =
@@ -150,27 +150,27 @@ impl GlobalElevatorInfo {
         return order_lights;
     }
 
-    pub fn get_global_elevators(&self) -> Vec<Option<ElevatorInfo>> {
-        return self.clone().global_elevators.clone();
+    pub fn get_connected_elevators(&self) -> Vec<Option<ElevatorInfo>> {
+        return self.clone().connected_elevators.clone();
     }
 
     pub fn get_local_elevator_info(&self) -> Option<ElevatorInfo> {
-        return self.clone().global_elevators[self.local_id]
+        return self.clone().connected_elevators[self.local_id]
             .clone();
     }
 }
 
-pub fn global_elevator_info(
+pub fn connected_elevator_info(
     local_update: cbc::Receiver<ElevatorInfo>, 
     remote_update: cbc::Receiver<Vec<ElevatorInfo>>,
     set_pending: cbc::Receiver<(bool, usize, CallButton)>, 
-    global_info_update: cbc::Sender<GlobalElevatorInfo>,
+    global_info_update: cbc::Sender<ConnectedElevatorInfo>,
     assign_orders_locally_tx: cbc::Sender<CallButton>) {
 
-    let mut global_info: GlobalElevatorInfo;
+    let mut global_info: ConnectedElevatorInfo;
     
     let initial_info = local_update.recv().unwrap();
-    global_info = GlobalElevatorInfo::new(initial_info, MAX_NUM_ELEV);
+    global_info = ConnectedElevatorInfo::new(initial_info, MAX_NUM_ELEV);
 
     let (reassign_orders_tx, reassign_orders_rx) = cbc::unbounded::<Vec<CallButton>>();
 
@@ -215,7 +215,7 @@ pub fn global_elevator_info(
     }
 }
 
-pub fn set_order_lights(global_info_rx: cbc::Receiver<GlobalElevatorInfo>, set_lights_tx: cbc::Sender<HardwareCommand>) {
+pub fn set_order_lights(global_info_rx: cbc::Receiver<ConnectedElevatorInfo>, set_lights_tx: cbc::Sender<HardwareCommand>) {
     let elev_num_floors = 4;
     let mut old_lights: OrderList = OrderList::new(elev_num_floors);
     loop {
@@ -323,11 +323,11 @@ fn merge_remote_orders(local_order_info: OrderList, remote_orders: OrderList) ->
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::elevio::elev::*;
-    use crate::elevio::poll::CallButton;
-    use crate::fsm::elevatorfsm::State;
-    use crate::order_manager::order_list::OrderList;
-    use crate::order_manager::order_list::OrderType;
+    use crate::local_elevator::elevio::elev::*;
+    use crate::local_elevator::elevio::poll::CallButton;
+    use crate::local_elevator::fsm::elevatorfsm::State;
+    use crate::local_elevator::fsm::order_list::OrderList;
+    use crate::local_elevator::fsm::order_list::OrderType;
     extern crate rand;
     fn create_random_remote_order_list(max_number_of_elevators: usize) -> OrderList {
         let n_floors = 5;
@@ -403,14 +403,14 @@ mod test {
             floor: 3,
             responsible_orders: OrderList::new(5),
         };
-        let mut global_elevator_info: GlobalElevatorInfo =
-            GlobalElevatorInfo::new(local_elev_info, MAX_NUM_ELEV);
-        global_elevator_info.update_remote_elevator_info(remote_update.clone());
+        let mut connected_elevator_info: ConnectedElevatorInfo =
+            ConnectedElevatorInfo::new(local_elev_info, MAX_NUM_ELEV);
+        connected_elevator_info.update_remote_elevator_info(remote_update.clone());
         let mut is_identical = true;
         for elev in remote_update.iter().cloned() {
             let elev_id: usize = elev.get_id();
             if elev
-                != global_elevator_info.get_global_elevators()[elev_id]
+                != connected_elevator_info.get_connected_elevators()[elev_id]
                     .clone()
                     .unwrap()
             {
@@ -430,11 +430,11 @@ mod test {
             floor: 3,
             responsible_orders: OrderList::new(5),
         };
-        let mut global_elevator_info: GlobalElevatorInfo =
-            GlobalElevatorInfo::new(local_elev_info, max_num_elev);
-        global_elevator_info.update_remote_elevator_info(create_empty_remote_update(max_num_elev));
-        global_elevator_info.set_to_pending(true, 0, CallButton { floor: 2, call: 1 });
-        assert!(global_elevator_info.is_pending(0, CallButton { floor: 2, call: 1 }));
+        let mut connected_elevator_info: ConnectedElevatorInfo =
+            ConnectedElevatorInfo::new(local_elev_info, max_num_elev);
+        connected_elevator_info.update_remote_elevator_info(create_empty_remote_update(max_num_elev));
+        connected_elevator_info.set_to_pending(true, 0, CallButton { floor: 2, call: 1 });
+        assert!(connected_elevator_info.is_pending(0, CallButton { floor: 2, call: 1 }));
     }
     #[test]
     fn it_correctly_updates_remote_pending_to_active() {
@@ -447,17 +447,17 @@ mod test {
             responsible_orders: OrderList::new(ELEV_NUM_FLOORS),
         };
 
-        let mut global_elevator_info: GlobalElevatorInfo =
-            GlobalElevatorInfo::new(local_elev_info, max_num_elev);
+        let mut connected_elevator_info: ConnectedElevatorInfo =
+            ConnectedElevatorInfo::new(local_elev_info, max_num_elev);
         let mut remote_update = create_empty_remote_update(max_num_elev);
-        global_elevator_info.update_remote_elevator_info(remote_update.clone());
-        global_elevator_info.set_to_pending(true, 0, CallButton { floor: 2, call: 1 });
+        connected_elevator_info.update_remote_elevator_info(remote_update.clone());
+        connected_elevator_info.set_to_pending(true, 0, CallButton { floor: 2, call: 1 });
         remote_update[0]
             .responsible_orders
             .set_active(CallButton { floor: 2, call: 1 });
         println!("{:#?}", remote_update[0].clone());
-        global_elevator_info.update_remote_elevator_info(remote_update.clone());
-        assert!(global_elevator_info.is_active(0, CallButton { floor: 2, call: 1 }));
+        connected_elevator_info.update_remote_elevator_info(remote_update.clone());
+        assert!(connected_elevator_info.is_active(0, CallButton { floor: 2, call: 1 }));
     }
 
     #[test]
@@ -471,8 +471,8 @@ mod test {
             responsible_orders: OrderList::new(5),
         };
 
-        let mut global_elevator_info: GlobalElevatorInfo =
-            GlobalElevatorInfo::new(local_elev_info, max_num_elev);
+        let mut connected_elevator_info: ConnectedElevatorInfo =
+            ConnectedElevatorInfo::new(local_elev_info, max_num_elev);
 
         let local_elev_info_2: ElevatorInfo = ElevatorInfo {
             id: 2,
@@ -482,9 +482,9 @@ mod test {
             responsible_orders: OrderList::new(5),
         };
 
-        global_elevator_info.update_local_elevator_info(local_elev_info_2.clone());
+        connected_elevator_info.update_local_elevator_info(local_elev_info_2.clone());
         assert_eq!(
-            global_elevator_info.get_local_elevator_info().unwrap(),
+            connected_elevator_info.get_local_elevator_info().unwrap(),
             local_elev_info_2
         );
     }
@@ -509,10 +509,10 @@ mod test {
         };
         let mut remote_update: Vec<ElevatorInfo> = Vec::new();
         remote_update.push(bad_remote_elev_info);
-        let mut global_elevator_info: GlobalElevatorInfo =
-            GlobalElevatorInfo::new(local_elev_info.clone(), 10);
-        global_elevator_info.update_remote_elevator_info(remote_update);
-        assert_eq!(global_elevator_info.get_local_elevator_info().unwrap(), local_elev_info);
+        let mut connected_elevator_info: ConnectedElevatorInfo =
+            ConnectedElevatorInfo::new(local_elev_info.clone(), 10);
+        connected_elevator_info.update_remote_elevator_info(remote_update);
+        assert_eq!(connected_elevator_info.get_local_elevator_info().unwrap(), local_elev_info);
     }
 
     #[test]

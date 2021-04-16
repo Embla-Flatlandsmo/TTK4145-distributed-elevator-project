@@ -1,34 +1,35 @@
-use crate::network::global_elevator::GlobalElevatorInfo;
-use crate::elevio::poll::{CallButton, CAB};
+use crate::global_elevator_info::connected_elevators::ConnectedElevatorInfo;
+use crate::local_elevator::elevio::poll::{CallButton, CAB};
 use crossbeam_channel as cbc;
 use crate::util::constants as setting;
 use std::thread::*;
+use std::time;
 
-pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
+pub fn hall_order_transmitter(connected_info_ch: cbc::Receiver<ConnectedElevatorInfo>,
     call_button_recv: cbc::Receiver<CallButton>,
     set_pending: cbc::Sender<(bool, usize, CallButton)>,
     assign_order_locally: cbc::Sender<CallButton>) {
 
-    let mut global_elevator_info: GlobalElevatorInfo;
+    let mut connected_elevator_info: ConnectedElevatorInfo;
     let (check_if_active_tx, check_if_active_rx) = cbc::unbounded::<(usize, CallButton)>();
     
     let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<(usize, CallButton)>();
 
     {
     spawn(move || {
-        crate::network::bcast::tx(setting::ORDER_PORT, send_bcast_rx, 3);
+        crate::network_interface::bcast::tx(setting::ORDER_PORT, send_bcast_rx, 3);
     });
     }
 
     cbc::select!{
-        recv(global_info_ch) -> a => {
-            global_elevator_info = a.unwrap();
+        recv(connected_info_ch) -> a => {
+            connected_elevator_info = a.unwrap();
         }
     }
     loop {
         cbc::select!{
-            recv(global_info_ch) -> a => {
-                global_elevator_info = a.unwrap();
+            recv(connected_info_ch) -> a => {
+                connected_elevator_info = a.unwrap();
             },
             recv(call_button_recv) -> a => {
 
@@ -39,8 +40,8 @@ pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
                     assign_order_locally.send(call_button).unwrap();
                 }
                 else {
-                    let lowest_cost_id = global_elevator_info.find_lowest_cost_id(call_button);
-                    // let lowest_cost_id = find_lowest_cost_id(global_elevator_info.clone());
+                    let lowest_cost_id = connected_elevator_info.find_lowest_cost_id(call_button);
+                    // let lowest_cost_id = find_lowest_cost_id(connected_elevator_info.clone());
                     if lowest_cost_id == setting::ID {
                         assign_order_locally.send(call_button).unwrap();
                     }
@@ -57,7 +58,7 @@ pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
             },
             recv(check_if_active_rx) -> a => {
                 let (id, button) = a.unwrap();
-                if !global_elevator_info.is_active(id, button) {
+                if !connected_elevator_info.is_active(id, button) {
                     assign_order_locally.send(button).unwrap();
                     set_pending.send((false, id, button)).unwrap();
                 }
@@ -69,7 +70,7 @@ pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
 pub fn cab_order_backup_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std::marker::Send>(elev_info_rx: cbc::Receiver::<ElevatorInfo>){
     let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || {
-        crate::network::bcast::tx(setting::CAB_BACKUP_PORT, send_bcast_rx, 10);
+        crate::network_interface::bcast::tx(setting::CAB_BACKUP_PORT, send_bcast_rx, 10);
     });
     
     loop {

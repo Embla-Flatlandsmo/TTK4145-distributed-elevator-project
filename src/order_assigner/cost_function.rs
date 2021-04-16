@@ -1,6 +1,6 @@
-use crate::elevio::{elev, poll};
-use crate::fsm::door_timer::TimerCommand;
-use crate::fsm::elevatorfsm::*;
+use crate::local_elevator::elevio::{elev, poll};
+use crate::local_elevator::fsm::door_timer::TimerCommand;
+use crate::local_elevator::fsm::elevatorfsm::*;
 use crossbeam_channel as cbc;
 use crate::util::constants as setting;
 
@@ -60,7 +60,7 @@ fn simulate_next_step(fsm: &mut Elevator) -> usize {
 mod test {
     #![allow(unused_variables, unused_mut)]
     use super::*;
-    use crate::fsm::door_timer::TimerCommand;
+    use crate::local_elevator::fsm::door_timer::TimerCommand;
     use crossbeam_channel as cbc;
     fn initialize_elevator(
         num_floors: u8,
