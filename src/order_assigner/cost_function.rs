@@ -16,8 +16,9 @@ pub fn time_to_idle(ref mut elev_info: ElevatorInfo, ref button: poll::CallButto
     // Dummy timers needed to "disconnect" the elevator from its current channel
     let (dummy_hw_tx, _dummy_hw_rx) = cbc::unbounded::<elev::HardwareCommand>();
     let (dummy_timer_tx, _dummy_timer_rx) = cbc::unbounded::<TimerCommand>();
+    let (dummy_state_updater_tx, dummy_state_updater_rx) = cbc::unbounded::<State>();
 
-    let mut elev = Elevator::create_simulation_elevator(elev_info.clone(), dummy_hw_tx, dummy_timer_tx);
+    let mut elev = Elevator::create_simulation_elevator(elev_info.clone(), dummy_hw_tx, dummy_timer_tx, dummy_state_updater_tx);
     elev.on_event(Event::OnNewOrder{btn: *button});
     let mut duration: usize = 0;
     if elev.get_state() == State::Obstructed {

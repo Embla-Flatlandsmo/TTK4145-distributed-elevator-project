@@ -13,7 +13,6 @@ pub mod local_elevator {
         pub mod poll;
     }
     pub mod fsm {
-        pub mod direction_decider;
         pub mod door_timer;
         pub mod elevatorfsm;
         pub mod order_list;
