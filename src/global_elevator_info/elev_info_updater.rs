@@ -141,7 +141,7 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(
 }
 
 
-
+/*
 pub fn cab_order_backup_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std::marker::Send>(elev_info_rx: cbc::Receiver::<ElevatorInfo>){
 
     let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<ElevatorInfo>();
@@ -190,3 +190,4 @@ pub fn cab_order_backup_rx<T: serde::de::DeserializeOwned>(port: u16, assign_cab
     }
 
 }
+*/

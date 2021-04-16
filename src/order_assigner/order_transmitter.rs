@@ -3,7 +3,7 @@ use crate::elevio::poll::{CallButton, CAB};
 use crossbeam_channel as cbc;
 use crate::util::constants as setting;
 use std::thread::*;
-/*
+
 pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
     call_button_recv: cbc::Receiver<CallButton>,
     set_pending: cbc::Sender<(bool, usize, CallButton)>,
@@ -40,6 +40,7 @@ pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
                 }
                 else {
                     let lowest_cost_id = global_elevator_info.find_lowest_cost_id(call_button);
+                    // let lowest_cost_id = find_lowest_cost_id(global_elevator_info.clone());
                     if lowest_cost_id == setting::ID {
                         assign_order_locally.send(call_button).unwrap();
                     }
@@ -65,23 +66,18 @@ pub fn order_transmitter(global_info_ch: cbc::Receiver<GlobalElevatorInfo>,
     }
 }
 
-pub fn order_receiver(assign_orders_locally_tx: cbc::Sender<CallButton>, set_pending_tx: cbc::Sender<(bool, usize, CallButton)>) {
-        // The reciever for orders
-        let (order_recv_tx, order_recv_rx) = cbc::unbounded::<(usize, CallButton)>();
-        spawn(move || {
-            crate::network::bcast::rx(setting::ORDER_PORT, order_recv_tx);
-        });
-
-        loop {
-            let res = order_recv_rx.recv();
-            let order = res.unwrap();
-            let id = order.0;
-            let call_button = order.1;
-            if id == setting::ID {
-                assign_orders_locally_tx.send(call_button).unwrap();
-            } else {
-                set_pending_tx.send((true, id, call_button)).unwrap();
+pub fn cab_order_backup_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std::marker::Send>(elev_info_rx: cbc::Receiver::<ElevatorInfo>){
+    let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<ElevatorInfo>();
+    spawn(move || {
+        crate::network::bcast::tx(setting::CAB_BACKUP_PORT, send_bcast_rx, 10);
+    });
+    
+    loop {
+        cbc::select! {
+            recv(elev_info_rx) -> new_info => {
+                let elev_info = new_info.unwrap();
+                send_bcast_tx.send(elev_info.clone()).unwrap(); //cab_order_backup_rx on other nodes get this
             }
         }
+    }
 }
-*/
