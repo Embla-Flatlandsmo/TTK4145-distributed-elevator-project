@@ -206,16 +206,12 @@ fn main() -> std::io::Result<()> {
                     State::Obstructed => {
                         timeout_duration = time::Duration::from_secs(setting::OBSTRUCTED_TIME_BEFORE_REASSIGN_SEC);
                     },
-                    State::Moving => {
+                    State::Moving | State::Initializing => {
                         timeout_duration = time::Duration::from_secs(setting::MOTOR_TIMEOUT_DURATION_SEC);
                     },
-                    State::Initializing => {
-                        timeout_duration = time::Duration::from_secs(setting::MOTOR_TIMEOUT_DURATION_SEC);
-                    }
                     _ => {
-                        peer_tx_enable_tx.send(true).unwrap();
-                        timeout_duration = time::Duration::new(u64::MAX, 0);
-                    }
+                        timeout_duration = time::Duration::new(u64::MAX,0);
+                    },
                 }
             }
         }

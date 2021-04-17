@@ -1,8 +1,8 @@
-use crossbeam_channel as cbc;
 use crate::util::constants as setting;
+use crossbeam_channel as cbc;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Timer {
+struct Timer {
     start_time: std::time::Instant,
     timeout_time: std::time::Duration,
     enabled: bool,
@@ -14,7 +14,7 @@ pub enum TimerCommand {
 }
 
 impl Timer {
-    pub fn new(timeout_sec: u64) -> Timer {
+    fn new(timeout_sec: u64) -> Timer {
         Timer {
             start_time: std::time::Instant::now(),
             timeout_time: std::time::Duration::new(timeout_sec, 0),
@@ -22,7 +22,7 @@ impl Timer {
         }
     }
 
-    pub fn on_command(&mut self, command: TimerCommand) {
+    fn on_command(&mut self, command: TimerCommand) {
         match command {
             TimerCommand::Start => self.start(),
             TimerCommand::Cancel => self.cancel(),

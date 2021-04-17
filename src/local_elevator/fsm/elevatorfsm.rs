@@ -1,9 +1,9 @@
 #![allow(dead_code)]
-use serde;
 use crate::local_elevator::elevio::elev as elevio;
 use crate::local_elevator::elevio::poll;
 use crate::local_elevator::fsm::order_list;
 use crate::util::constants as setting;
+use serde;
 
 #[path = "./direction_decider.rs"]
 mod direction_decider;
@@ -58,9 +58,8 @@ pub struct Elevator {
     hw_tx: crossbeam_channel::Sender<elevio::HardwareCommand>,
     timer_start_tx: cbc::Sender<TimerCommand>,
     state_update_tx: cbc::Sender<State>,
-    info: ElevatorInfo
+    info: ElevatorInfo,
 }
-
 
 impl Elevator {
     pub fn new(
@@ -77,14 +76,13 @@ impl Elevator {
             hw_tx: hw_commander,
             timer_start_tx: timer_start_tx,
             state_update_tx: state_updater_tx,
-            info: ElevatorInfo{
+            info: ElevatorInfo {
                 id: setting::ID,
                 state: State::Initializing,
                 dirn: elevio::DIRN_DOWN,
                 floor: u8::MAX,
                 responsible_orders: order_list::OrderList::new(setting::ELEV_NUM_FLOORS),
-            }
-            
+            },
         };
     }
     /// Takes the elevator fsm from one state to the next and sends the appropriate hardware commands on the hardware channel
@@ -100,17 +98,19 @@ impl Elevator {
         }
     }
 
-    pub fn create_simulation_elevator(info: ElevatorInfo, 
+    pub fn create_simulation_elevator(
+        info: ElevatorInfo,
         hw_commander: cbc::Sender<elevio::HardwareCommand>,
         timer_start_tx: cbc::Sender<TimerCommand>,
-        state_updater_tx: cbc::Sender<State>) -> Elevator {
-            return Elevator {
-                hw_tx: hw_commander,
-                timer_start_tx: timer_start_tx,
-                state_update_tx: state_updater_tx,
-                info: info.clone()
-            }
-        }
+        state_updater_tx: cbc::Sender<State>,
+    ) -> Elevator {
+        return Elevator {
+            hw_tx: hw_commander,
+            timer_start_tx: timer_start_tx,
+            state_update_tx: state_updater_tx,
+            info: info.clone(),
+        };
+    }
 
     pub fn get_info(&self) -> ElevatorInfo {
         return self.info.clone();
@@ -133,15 +133,16 @@ impl Elevator {
 
     fn on_door_time_out(&mut self) {
         let state = self.get_state();
-        let hw_tx = self.get_hw_tx_handle();
         match state {
             State::DoorOpen => {
-                hw_tx
+                self.hw_tx
                     .send(elevio::HardwareCommand::DoorLight { on: false })
                     .unwrap();
-                self.info.responsible_orders.clear_orders_on_floor(self.get_floor());
+                self.info
+                    .responsible_orders
+                    .clear_orders_on_floor(self.get_floor());
                 let new_dirn: u8 = direction_decider::choose_direction(self);
-                hw_tx
+                self.hw_tx
                     .send(elevio::HardwareCommand::MotorDirection { dirn: new_dirn })
                     .unwrap();
                 if new_dirn == elevio::DIRN_STOP {
@@ -153,7 +154,7 @@ impl Elevator {
                     self.state_update_tx.send(State::Moving).unwrap();
                 }
             }
-            _ => {},
+            _ => {}
         }
     }
 
@@ -178,7 +179,6 @@ impl Elevator {
                     self.state_update_tx.send(State::DoorOpen).unwrap();
                     //Start timer
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
-
                 } else {
                     self.state_update_tx.send(State::Moving).unwrap();
                 }
@@ -191,8 +191,8 @@ impl Elevator {
                     .unwrap();
                 self.info.state = State::Idle;
                 self.state_update_tx.send(State::Idle).unwrap();
-            },
-            State:: MovTimedOut => {
+            }
+            State::MovTimedOut => {
                 self.hw_tx
                     .send(elevio::HardwareCommand::MotorDirection {
                         dirn: elevio::DIRN_STOP,
@@ -243,7 +243,7 @@ impl Elevator {
                     self.state_update_tx.send(State::Moving).unwrap();
                     self.info.dirn = new_dirn;
                 }
-            },
+            }
 
             State::Initializing | State::MovTimedOut => {}
         }
@@ -275,30 +275,31 @@ impl Elevator {
                 self.info.responsible_orders.clear_all_orders();
                 self.info.responsible_orders.inside_queue = prev_inside_orders;
                 self.info.state = State::ObstrTimedOut;
-            },
-            State::Moving => {
+                self.state_update_tx.send(State::ObstrTimedOut).unwrap();
+            }
+            State::Moving | State::Initializing => {
                 let prev_inside_orders = self.get_orders().inside_queue.clone();
                 self.info.responsible_orders.clear_all_orders();
                 self.info.responsible_orders.inside_queue = prev_inside_orders;
                 self.info.state = State::MovTimedOut;
+                self.state_update_tx.send(State::MovTimedOut).unwrap();
             }
             _ => {}
         }
     }
-
 }
 
 pub fn create_simulation_elevator(
     elev_info: ElevatorInfo,
     dummy_hw_tx: cbc::Sender<elevio::HardwareCommand>,
     dummy_timer_start_tx: cbc::Sender<TimerCommand>,
-    dummy_state_updater_tx: cbc::Sender<State>
+    dummy_state_updater_tx: cbc::Sender<State>,
 ) -> Elevator {
     return Elevator {
         hw_tx: dummy_hw_tx,
         timer_start_tx: dummy_timer_start_tx,
         state_update_tx: dummy_state_updater_tx,
-        info: elev_info.clone()
+        info: elev_info.clone(),
     };
 }
 
@@ -309,9 +310,10 @@ mod test {
         arriving_floor: u8,
         hardware_command_tx: cbc::Sender<elevio::HardwareCommand>,
         door_timer_start_tx: cbc::Sender<TimerCommand>,
-        state_updater_tx: cbc::Sender<State>
+        state_updater_tx: cbc::Sender<State>,
     ) -> Elevator {
-        let mut elevator = Elevator::new(hardware_command_tx, door_timer_start_tx, state_updater_tx);
+        let mut elevator =
+            Elevator::new(hardware_command_tx, door_timer_start_tx, state_updater_tx);
         elevator.on_event(Event::OnFloorArrival {
             floor: arriving_floor,
         });
@@ -363,7 +365,6 @@ mod test {
         });
 
         hw_rx.recv().unwrap();
-        
         assert_eq!(
             hw_rx.recv(),
             Ok(elevio::HardwareCommand::MotorDirection {
