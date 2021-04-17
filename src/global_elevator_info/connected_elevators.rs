@@ -1,6 +1,6 @@
 use crate::local_elevator::elevio::poll::{CallButton, CAB};
 use crate::local_elevator::elevio::elev::HardwareCommand;
-use crate::local_elevator::fsm::elevatorfsm::ElevatorInfo;
+use crate::local_elevator::fsm::elevatorfsm::{ElevatorInfo, State};
 use crate::local_elevator::fsm::order_list::{OrderList, OrderType};
 use crossbeam_channel as cbc;
 use std::time;
@@ -41,22 +41,25 @@ impl ConnectedElevatorInfo {
         for i in 0..MAX_NUM_ELEV {
             if i != LOCAL_ID {
                 let mut remote_info: ElevatorInfo;
-                let local_info: ElevatorInfo;
+                let existing_info: ElevatorInfo;
                 match prev_connected_elev_info[i].as_ref() {
                     None => {
                         new_connected_elev_info[i] = fix_len_remote_elev_update[i].clone();
                     },
                     Some(vl) => {
-                        local_info = vl.clone();
+                        existing_info = vl.clone();
                         match fix_len_remote_elev_update[i].as_ref() {
                             None => {
-                                lost_orders.append(&mut assign_orders_locally(local_info.responsible_orders));
+                                lost_orders.append(&mut assign_orders_locally(existing_info.responsible_orders));
                                 new_connected_elev_info[i] = None;
                                 
                             },
                             Some(vr) => {
                                 remote_info = vr.clone();
-                                remote_info.responsible_orders = merge_remote_orders(local_info.clone().responsible_orders.clone(), remote_info.clone().responsible_orders.clone());
+                                if remote_info.state == State::MovTimedOut || remote_info.state == State::ObstrTimedOut {
+                                    lost_orders.append(&mut assign_orders_locally(existing_info.responsible_orders.clone()));
+                                }
+                                remote_info.responsible_orders = merge_remote_orders(existing_info.clone().responsible_orders.clone(), remote_info.clone().responsible_orders.clone());
                                 new_connected_elev_info[i] = Some(remote_info);
                             }
                         }

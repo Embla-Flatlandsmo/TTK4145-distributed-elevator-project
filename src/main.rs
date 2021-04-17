@@ -220,20 +220,8 @@ fn main() -> std::io::Result<()> {
             }
         }
         if when_state_updated.elapsed() > timeout_duration {
-            if fsm.get_state() == State::Moving || fsm.get_state() == State::Initializing  {
-                panic!("Detected motor power loss. Closing the software.")
-            }
-
-            {
-                let peer_enable = peer_tx_enable_tx.clone();
-                println!("Elevator has been obstructed for too long. Disabling peer transmission.");
-                spawn(move || {
-                    peer_enable.send(false).unwrap();
-                    sleep(time::Duration::from_secs(2));
-                    peer_enable.send(true).unwrap();
-                });
-            }
-
+            fsm.on_event(Event::OnStateTimeOut);
+            local_elev_info_tx.send(fsm.get_info()).unwrap();
         }
     }
 }

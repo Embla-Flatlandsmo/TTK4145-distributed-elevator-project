@@ -57,7 +57,8 @@ fn time_to_idle(ref mut elev_info: ElevatorInfo, ref button: poll::CallButton) -
     let mut elev = Elevator::create_simulation_elevator(elev_info.clone(), dummy_hw_tx, dummy_timer_tx, dummy_state_updater_tx);
     elev.on_event(Event::OnNewOrder{btn: *button});
     let mut duration: usize = 0;
-    if elev.get_state() == State::Obstructed {
+    let state = elev.get_state();
+    if state == State::Obstructed || state == State::ObstrTimedOut || state == State::MovTimedOut {
         return usize::MAX;
     }
     while elev.get_state() != State::Idle {

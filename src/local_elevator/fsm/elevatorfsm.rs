@@ -33,8 +33,9 @@ pub enum State {
     DoorOpen,
     Idle,
     Obstructed,
-    Stopped, //Todo
+    ObstrTimedOut,
     Moving,
+    MovTimedOut,
 }
 
 #[derive(Debug)]
@@ -43,6 +44,7 @@ pub enum Event {
     OnFloorArrival { floor: u8 },
     OnNewOrder { btn: poll::CallButton },
     OnObstructionSignal { active: bool },
+    OnStateTimeOut,
 }
 
 /// Contains all we need to know about our elevator.
@@ -93,6 +95,7 @@ impl Elevator {
             Event::OnFloorArrival { floor } => self.on_floor_arrival(floor),
             Event::OnNewOrder { btn } => self.on_new_order(btn),
             Event::OnObstructionSignal { active } => self.on_obstruction_signal(active),
+            Event::OnStateTimeOut => self.on_state_timeout(),
             _ => panic!("Invalid event: {:#?}", event),
         }
     }
@@ -177,7 +180,6 @@ impl Elevator {
                     self.timer_start_tx.send(TimerCommand::Start).unwrap();
 
                 } else {
-                    self.info.floor = new_floor;
                     self.state_update_tx.send(State::Moving).unwrap();
                 }
             }
@@ -189,6 +191,20 @@ impl Elevator {
                     .unwrap();
                 self.info.state = State::Idle;
                 self.state_update_tx.send(State::Idle).unwrap();
+            },
+            State:: MovTimedOut => {
+                self.hw_tx
+                    .send(elevio::HardwareCommand::MotorDirection {
+                        dirn: elevio::DIRN_STOP,
+                    })
+                    .unwrap();
+                self.hw_tx
+                    .send(elevio::HardwareCommand::DoorLight { on: true })
+                    .unwrap();
+                self.info.state = State::DoorOpen;
+                self.state_update_tx.send(State::DoorOpen).unwrap();
+                //Start timer
+                self.timer_start_tx.send(TimerCommand::Start).unwrap();
             }
             _ => {}
         }
@@ -205,12 +221,10 @@ impl Elevator {
                 }
                 self.info.responsible_orders.set_active(btn);
             }
-            State::Obstructed => {
+            State::Obstructed | State::Moving | State::ObstrTimedOut => {
                 self.info.responsible_orders.set_active(btn);
             }
-            State::Moving => {
-                self.info.responsible_orders.set_active(btn);
-            }
+
             State::Idle => {
                 self.info.responsible_orders.set_active(btn);
                 if self.get_floor() == btn.floor {
@@ -229,15 +243,15 @@ impl Elevator {
                     self.state_update_tx.send(State::Moving).unwrap();
                     self.info.dirn = new_dirn;
                 }
-            }
-            State::Initializing => {}
-            _ => panic!("Tried to add new order in invalid state: {:#?}", state),
+            },
+
+            State::Initializing | State::MovTimedOut => {}
         }
     }
 
     fn on_obstruction_signal(&mut self, active: bool) {
         let state = self.get_state();
-        if state == State::DoorOpen || state == State::Obstructed {
+        if state == State::DoorOpen || state == State::Obstructed || state == State::ObstrTimedOut {
             match active {
                 true => {
                     self.timer_start_tx.send(TimerCommand::Cancel).unwrap();
@@ -252,6 +266,26 @@ impl Elevator {
             }
         }
     }
+
+    fn on_state_timeout(&mut self) {
+        let state = self.get_state();
+        match state {
+            State::Obstructed => {
+                let prev_inside_orders = self.get_orders().inside_queue.clone();
+                self.info.responsible_orders.clear_all_orders();
+                self.info.responsible_orders.inside_queue = prev_inside_orders;
+                self.info.state = State::ObstrTimedOut;
+            },
+            State::Moving => {
+                let prev_inside_orders = self.get_orders().inside_queue.clone();
+                self.info.responsible_orders.clear_all_orders();
+                self.info.responsible_orders.inside_queue = prev_inside_orders;
+                self.info.state = State::MovTimedOut;
+            }
+            _ => {}
+        }
+    }
+
 }
 
 pub fn create_simulation_elevator(
