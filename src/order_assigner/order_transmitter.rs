@@ -3,7 +3,9 @@ use crate::local_elevator::elevio::poll::{CallButton, CAB};
 use crossbeam_channel as cbc;
 use crate::util::constants as setting;
 use std::thread::*;
-use std::time;
+
+#[path = "./cost_function.rs"]
+mod cost_function;
 
 pub fn hall_order_transmitter(connected_info_ch: cbc::Receiver<ConnectedElevatorInfo>,
     call_button_recv: cbc::Receiver<CallButton>,
@@ -40,8 +42,7 @@ pub fn hall_order_transmitter(connected_info_ch: cbc::Receiver<ConnectedElevator
                     assign_order_locally.send(call_button).unwrap();
                 }
                 else {
-                    let lowest_cost_id = connected_elevator_info.find_lowest_cost_id(call_button);
-                    // let lowest_cost_id = find_lowest_cost_id(connected_elevator_info.clone());
+                    let lowest_cost_id = cost_function::find_lowest_cost_id(connected_elevator_info.clone(), call_button);
                     if lowest_cost_id == setting::ID {
                         assign_order_locally.send(call_button).unwrap();
                     }

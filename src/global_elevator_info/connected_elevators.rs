@@ -1,68 +1,36 @@
 use crate::local_elevator::elevio::poll::{CallButton, CAB};
 use crate::local_elevator::elevio::elev::HardwareCommand;
 use crate::local_elevator::fsm::elevatorfsm::ElevatorInfo;
-use crate::order_assigner::cost_function;
 use crate::local_elevator::fsm::order_list::{OrderList, OrderType};
 use crossbeam_channel as cbc;
 use std::time;
-use crate::util::constants::{MAX_NUM_ELEV, ELEV_NUM_FLOORS, ID};
+use crate::util::constants::{MAX_NUM_ELEV, ELEV_NUM_FLOORS};
+use crate::util::constants::ID as LOCAL_ID;
 use std::thread::*;
 
 #[derive(Clone, Debug)]
 pub struct ConnectedElevatorInfo {
-    local_id: usize,
     connected_elevators: Vec<Option<ElevatorInfo>>,
 }
 
 impl ConnectedElevatorInfo {
-    pub fn new(local_elev: ElevatorInfo, max_number_of_elevators: usize) -> ConnectedElevatorInfo {
+    fn new(local_elev: ElevatorInfo, max_number_of_elevators: usize) -> ConnectedElevatorInfo {
         let mut connected_elevs: Vec<Option<ElevatorInfo>> = Vec::new();
         connected_elevs.resize_with(max_number_of_elevators, || None);
-        connected_elevs[local_elev.clone().get_id()] = Some(local_elev.clone());
+        connected_elevs[LOCAL_ID] = Some(local_elev.clone());
         ConnectedElevatorInfo {
-            local_id: local_elev.get_id(),
             connected_elevators: connected_elevs,
         }
     }
 
-    pub fn find_lowest_cost_id(&self, btn: CallButton) -> usize {
-        let local_elev_info;
-        match self.get_local_elevator_info() {
-            Some(v) => local_elev_info = v,
-            None => {
-                println!("No value found at local elevator ID index");
-                return self.local_id;
-        }
-    }
-
-        let mut lowest_cost: usize =
-            cost_function::time_to_idle(local_elev_info, btn);
-        let mut lowest_cost_id: usize = self.local_id;
-
-        for i in self.connected_elevators.iter().cloned() {
-            let mut elev_cost: usize = usize::MAX;
-            match i.clone() {
-                Some(val) => {
-                    elev_cost = cost_function::time_to_idle((val).clone(), btn);
-                    if elev_cost < lowest_cost {
-                        lowest_cost_id = (val).id;
-                        lowest_cost = elev_cost;
-                    }
-                }
-                None => {}
-            }
-        }
-        return lowest_cost_id;
-    }
-
     /// Updates global info with the newest info received from remote elevators.
-    pub fn update_remote_elevator_info(&mut self, remote_update: Vec<ElevatorInfo>) -> Vec<CallButton> {
+    fn update_remote_elevator_info(&mut self, remote_update: Vec<ElevatorInfo>) -> Vec<CallButton> {
         let mut new_connected_elev_info: Vec<Option<ElevatorInfo>> = Vec::new();
         new_connected_elev_info.resize_with(MAX_NUM_ELEV, || None);
         
         let mut fix_len_remote_elev_update = new_connected_elev_info.clone();
         let prev_connected_elev_info = self.get_connected_elevators();
-        new_connected_elev_info[self.local_id] = self.get_local_elevator_info();
+        new_connected_elev_info[LOCAL_ID] = self.get_local_elevator_info();
         let mut lost_orders: Vec<CallButton> = Vec::new();
 
         for elev in remote_update.iter() {
@@ -71,7 +39,7 @@ impl ConnectedElevatorInfo {
         
         println!("{:#?}", fix_len_remote_elev_update.clone());
         for i in 0..MAX_NUM_ELEV {
-            if i != self.local_id.clone() {
+            if i != LOCAL_ID {
                 let mut remote_info: ElevatorInfo;
                 let local_info: ElevatorInfo;
                 match prev_connected_elev_info[i].as_ref() {
@@ -100,11 +68,11 @@ impl ConnectedElevatorInfo {
         return lost_orders;
     }
 
-    pub fn update_local_elevator_info(&mut self, local_update: ElevatorInfo) {
-        self.connected_elevators[self.local_id] = Some(local_update);
+    fn update_local_elevator_info(&mut self, local_update: ElevatorInfo) {
+        self.connected_elevators[LOCAL_ID] = Some(local_update);
     }
 
-    pub fn set_to_pending(&mut self, should_set: bool, id: usize, button: CallButton) {
+    fn set_to_pending(&mut self, should_set: bool, id: usize, button: CallButton) {
         let mut elev_info: ElevatorInfo;
         match self.connected_elevators[id].as_ref() {
             Some(v) => elev_info = v.clone(),
@@ -155,7 +123,7 @@ impl ConnectedElevatorInfo {
     }
 
     pub fn get_local_elevator_info(&self) -> Option<ElevatorInfo> {
-        return self.clone().connected_elevators[self.local_id]
+        return self.clone().connected_elevators[LOCAL_ID]
             .clone();
     }
 }
@@ -327,9 +295,8 @@ mod test {
     use crate::local_elevator::elevio::poll::CallButton;
     use crate::local_elevator::fsm::elevatorfsm::State;
     use crate::local_elevator::fsm::order_list::OrderList;
-    use crate::local_elevator::fsm::order_list::OrderType;
     extern crate rand;
-    fn create_random_remote_order_list(max_number_of_elevators: usize) -> OrderList {
+    fn create_random_remote_order_list() -> OrderList {
         let n_floors = 5;
         let mut order_list = OrderList::new(n_floors);
         for i in 0..n_floors - 1 {
@@ -351,20 +318,20 @@ mod test {
         return order_list;
     }
 
-    fn create_random_remote_update(max_number_of_elevators: usize) -> Vec<ElevatorInfo> {
+    fn create_random_remote_update() -> Vec<ElevatorInfo> {
         let elev_id_0: ElevatorInfo = ElevatorInfo {
             id: 0,
             state: State::Moving,
             dirn: DIRN_UP,
             floor: 3,
-            responsible_orders: create_random_remote_order_list(max_number_of_elevators),
+            responsible_orders: create_random_remote_order_list(),
         };
         let elev_id_1: ElevatorInfo = ElevatorInfo {
             id: 1,
             state: State::Moving,
             dirn: DIRN_DOWN,
             floor: 1,
-            responsible_orders: create_random_remote_order_list(max_number_of_elevators),
+            responsible_orders: create_random_remote_order_list(),
         };
         let mut remote_update: Vec<ElevatorInfo> = Vec::new();
         remote_update.push(elev_id_0);
@@ -372,7 +339,7 @@ mod test {
         return remote_update;
     }
 
-    fn create_empty_remote_update(max_number_of_elevators: usize) -> Vec<ElevatorInfo> {
+    fn create_empty_remote_update() -> Vec<ElevatorInfo> {
         let elev_id_0: ElevatorInfo = ElevatorInfo {
             id: 0,
             state: State::Moving,
@@ -395,7 +362,7 @@ mod test {
 
     #[test]
     fn it_updates_from_remote() {
-        let remote_update: Vec<ElevatorInfo> = create_random_remote_update(MAX_NUM_ELEV);
+        let remote_update: Vec<ElevatorInfo> = create_random_remote_update();
         let local_elev_info: ElevatorInfo = ElevatorInfo {
             id: 2,
             state: State::Moving,
@@ -432,7 +399,7 @@ mod test {
         };
         let mut connected_elevator_info: ConnectedElevatorInfo =
             ConnectedElevatorInfo::new(local_elev_info, max_num_elev);
-        connected_elevator_info.update_remote_elevator_info(create_empty_remote_update(max_num_elev));
+        connected_elevator_info.update_remote_elevator_info(create_empty_remote_update());
         connected_elevator_info.set_to_pending(true, 0, CallButton { floor: 2, call: 1 });
         assert!(connected_elevator_info.is_pending(0, CallButton { floor: 2, call: 1 }));
     }
@@ -449,7 +416,7 @@ mod test {
 
         let mut connected_elevator_info: ConnectedElevatorInfo =
             ConnectedElevatorInfo::new(local_elev_info, max_num_elev);
-        let mut remote_update = create_empty_remote_update(max_num_elev);
+        let mut remote_update = create_empty_remote_update();
         connected_elevator_info.update_remote_elevator_info(remote_update.clone());
         connected_elevator_info.set_to_pending(true, 0, CallButton { floor: 2, call: 1 });
         remote_update[0]
@@ -491,7 +458,6 @@ mod test {
 
     #[test]
     fn it_does_not_overwrite_local() {
-        let max_num_elev = 10;
         let local_elev_info: ElevatorInfo = ElevatorInfo {
             id: 2,
             state: State::Moving,

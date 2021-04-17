@@ -2,7 +2,6 @@ use std::thread::*;
 use std::time;
 use crossbeam_channel as cbc;
 
-use crate::global_elevator_info::connected_elevators::ConnectedElevatorInfo;
 use crate::local_elevator::elevio::poll::{CallButton, CAB};
 use crate::local_elevator::fsm::elevatorfsm::ElevatorInfo;
 
@@ -29,7 +28,7 @@ pub fn hall_order_receiver(assign_orders_locally_tx: cbc::Sender<CallButton>, se
 }
 
 
-pub fn cab_order_backup_rx<T: serde::de::DeserializeOwned>(port: u16, assign_cab_orders_locally_tx: cbc::Sender::<CallButton>) {
+pub fn cab_order_backup_rx<T: serde::de::DeserializeOwned>(assign_cab_orders_locally_tx: cbc::Sender::<CallButton>) {
     let start_time = time::Instant::now();
     let timeout = time::Duration::from_millis(500);
 
@@ -49,7 +48,7 @@ pub fn cab_order_backup_rx<T: serde::de::DeserializeOwned>(port: u16, assign_cab
                     for f in 0..setting::ELEV_NUM_FLOORS {
                         let btn = CallButton{floor: f, call: CAB};
                         if elev_info.responsible_orders.is_active(btn) {
-                            assign_cab_orders_locally_tx.send(btn);
+                            assign_cab_orders_locally_tx.send(btn).unwrap();
                         }
                     }
                 }

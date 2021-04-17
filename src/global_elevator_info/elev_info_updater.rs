@@ -5,7 +5,6 @@ use std::time;
 use std::thread::*;
 use std::collections::HashMap;
 use crate::util::constants as setting;
-use crate::local_elevator::elevio::poll::{CallButton, CAB};
 
 #[derive(Debug, Clone)]
 pub struct RemoteElevatorUpdate {
@@ -19,12 +18,12 @@ pub fn local_elev_info_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std
     let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<ElevatorInfo>();
     {
     spawn(move || {
-        crate::network_interface::bcast::tx(setting::PEER_PORT, send_bcast_rx, 3);
+        crate::network_interface::bcast::tx(setting::ELEV_INFO_PORT, send_bcast_rx, 3);
     });
     }
     let mut enabled = true;
 
-    let ticker = cbc::tick(time::Duration::from_millis(15));
+    let ticker = cbc::tick(time::Duration::from_millis(setting::INFO_TRANSMIT_PERIOD_MILLISEC));
     let mut local_info: ElevatorInfo;
 
     cbc::select! {
@@ -52,17 +51,16 @@ pub fn local_elev_info_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std
 
 
 pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(
-    port: u16, 
     elev_info_update: cbc::Sender::<Vec<ElevatorInfo>>,
     cab_backup_channel: cbc::Sender::<ElevatorInfo>)
     {
-    let timeout = time::Duration::from_millis(500);
+    let timeout = time::Duration::from_millis(setting::TIME_UNTIL_PEER_LOST_MILLISEC);
     //let s = sock::new_rx(port).unwrap();
     //s.set_read_timeout(Some(timeout)).unwrap();
     
     let (elev_info_recv_tx, elev_info_recv_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || {
-        crate::network_interface::bcast::rx(setting::PEER_PORT, elev_info_recv_tx);
+        crate::network_interface::bcast::rx(setting::ELEV_INFO_PORT, elev_info_recv_tx);
     });
 
     let mut last_seen: HashMap<usize, time::Instant> = HashMap::new();
@@ -71,7 +69,7 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(
 
     loop {
         let mut modified = false;
-        let mut peers = Vec::new();
+        let peers: Vec<ElevatorInfo>;
         let mut lost = Vec::new();
         let mut reconnected_elevator = false;
 
@@ -93,7 +91,7 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(
                 // Send cab calls to reconnecting node
                 if reconnected_elevator {
                     if lost_peers.contains_key(&id.clone()){
-                        cab_backup_channel.send(lost_peers.get(&id).unwrap().clone());
+                        cab_backup_channel.send(lost_peers.get(&id).unwrap().clone()).unwrap();
                     }
                 } 
 

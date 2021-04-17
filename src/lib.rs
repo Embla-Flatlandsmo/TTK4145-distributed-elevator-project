@@ -20,7 +20,6 @@ pub mod local_elevator {
 }
 
 pub mod order_assigner {
-    pub mod cost_function;
     pub mod order_receiver;
     pub mod order_transmitter;
 }
