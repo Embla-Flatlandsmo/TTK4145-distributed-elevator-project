@@ -56,7 +56,8 @@ impl ConnectedElevatorInfo {
                             },
                             Some(vr) => {
                                 remote_info = vr.clone();
-                                if remote_info.state == State::MovTimedOut || remote_info.state == State::ObstrTimedOut {
+                                if (existing_info.state != State::MovTimedOut && remote_info.state == State::MovTimedOut) 
+                                || (existing_info.state != State::ObstrTimedOut && remote_info.state == State::ObstrTimedOut) {
                                     lost_orders.append(&mut assign_orders_locally(existing_info.responsible_orders.clone()));
                                 }
                                 remote_info.responsible_orders = merge_remote_orders(existing_info.clone().responsible_orders.clone(), remote_info.clone().responsible_orders.clone());

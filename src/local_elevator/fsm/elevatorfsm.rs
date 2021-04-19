@@ -271,16 +271,29 @@ impl Elevator {
         let state = self.get_state();
         match state {
             State::Obstructed => {
+                /* 
+                TODO: Discuss how to handle this.
+                See connected_elevators line 59-62
+                Should the elevator clear its own orders like this? Feels sorta risky (what if obstr timeout when no network?)
+                Better to just keep the orders? Set them to pending?
+                
                 let prev_inside_orders = self.get_orders().inside_queue.clone();
                 self.info.responsible_orders.clear_all_orders();
                 self.info.responsible_orders.inside_queue = prev_inside_orders;
+                */
                 self.info.state = State::ObstrTimedOut;
                 self.state_update_tx.send(State::ObstrTimedOut).unwrap();
             }
             State::Moving | State::Initializing => {
+                /* 
+                TODO: Discuss how to handle this.
+                See connected_elevators line 59-62
+                Should the elevator clear its own orders like this?
+
                 let prev_inside_orders = self.get_orders().inside_queue.clone();
                 self.info.responsible_orders.clear_all_orders();
                 self.info.responsible_orders.inside_queue = prev_inside_orders;
+                */
                 self.info.state = State::MovTimedOut;
                 self.state_update_tx.send(State::MovTimedOut).unwrap();
             }
