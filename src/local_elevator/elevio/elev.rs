@@ -6,25 +6,29 @@ use std::fmt;
 use std::io::*;
 
 
-
 #[derive(Clone, Debug)]
-pub struct Elevator {
+pub struct ElevatorHW {
         socket:     Arc<Mutex<TcpStream>>,
     pub num_floors: u8,
 }
 
 
-pub const HALL_UP:      u8 = 0;
-pub const HALL_DOWN:    u8 = 1;
-pub const CAB:          u8 = 2;
-
 pub const DIRN_DOWN:    u8 = u8::MAX;
 pub const DIRN_STOP:    u8 = 0;
 pub const DIRN_UP:      u8 = 1;
 
-impl Elevator {
+#[derive(PartialEq, Debug)]
+pub enum HardwareCommand{
+    DoorLight{on: bool},
+    MotorDirection{dirn: u8},
+    CallButtonLight{floor: u8, call: u8, on: bool},
+    StopLight{on: bool},
+    FloorLight{floor: u8}
+}
 
-    pub fn init(addr: &str, num_floors: u8) -> Result<Elevator> {
+impl ElevatorHW {
+
+    pub fn init(addr: &str, num_floors: u8) -> Result<ElevatorHW> {
         Ok(Self {
             socket: Arc::new(Mutex::new( TcpStream::connect(addr)? )),
             num_floors: num_floors,
@@ -99,18 +103,25 @@ impl Elevator {
         sock.read(&mut buf).unwrap();
         return buf[1] != 0;
     }
+
+    /// Helper function so elev can interact with the hardwarecommand struct
+    pub fn execute_command(&self, command: HardwareCommand) {
+        match command {
+            HardwareCommand::CallButtonLight{floor, call, on} => self.call_button_light(floor, call, on),
+            HardwareCommand::DoorLight{on} => self.door_light(on),
+            HardwareCommand::FloorLight{floor} => self.floor_indicator(floor),
+            HardwareCommand::MotorDirection{dirn} => self.motor_direction(dirn),
+            HardwareCommand::StopLight{on} => self.stop_button_light(on)
+        }
+    }
 }
 
-
-impl fmt::Display for Elevator {
+impl fmt::Display for ElevatorHW {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let addr = self.socket.lock().unwrap().peer_addr().unwrap();
         write!(f, "Elevator@{}({})", addr, self.num_floors)
     }
 }
-
-
-
 
 
 

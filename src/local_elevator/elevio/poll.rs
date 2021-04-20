@@ -1,18 +1,21 @@
-
-
 use std::time;
 use std::thread;
 use crossbeam_channel as cbc;
-
+use serde;
 use super::elev;
 
-#[derive(Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Copy, Clone)]
 pub struct CallButton {
     pub floor:  u8,
     pub call:   u8,
 }
 
-pub fn call_buttons(elev: elev::Elevator, ch: cbc::Sender<CallButton>, period: time::Duration){
+pub const HALL_UP:      u8 = 0;
+pub const HALL_DOWN:    u8 = 1;
+pub const CAB:          u8 = 2;
+
+
+pub fn call_buttons(elev: elev::ElevatorHW, ch: cbc::Sender<CallButton>, period: time::Duration){
 
     let mut prev = vec![[false; 3]; elev.num_floors.into()];
     loop {
@@ -29,7 +32,7 @@ pub fn call_buttons(elev: elev::Elevator, ch: cbc::Sender<CallButton>, period: t
     }
 }
 
-pub fn floor_sensor(elev: elev::Elevator, ch: cbc::Sender<u8>, period: time::Duration){
+pub fn floor_sensor(elev: elev::ElevatorHW, ch: cbc::Sender<u8>, period: time::Duration){
     
     let mut prev = u8::MAX;
     loop {
@@ -45,7 +48,7 @@ pub fn floor_sensor(elev: elev::Elevator, ch: cbc::Sender<u8>, period: time::Dur
     }
 }
 
-pub fn stop_button(elev: elev::Elevator, ch: cbc::Sender<bool>, period: time::Duration){
+pub fn stop_button(elev: elev::ElevatorHW, ch: cbc::Sender<bool>, period: time::Duration){
     
     let mut prev = false;
     loop {
@@ -58,7 +61,7 @@ pub fn stop_button(elev: elev::Elevator, ch: cbc::Sender<bool>, period: time::Du
     }
 }
 
-pub fn obstruction(elev: elev::Elevator, ch: cbc::Sender<bool>, period: time::Duration){
+pub fn obstruction(elev: elev::ElevatorHW, ch: cbc::Sender<bool>, period: time::Duration){
     
     let mut prev = false;
     loop {
