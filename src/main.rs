@@ -26,6 +26,8 @@ fn main() -> std::io::Result<()> {
     }
     let elev_hw_server: String = format!("{}:{}", "localhost", server_port);
 
+    // We must wait to assure that, in the case of software restart, the system is registered as lost:
+    std::thread::sleep(std::time::Duration::from_millis(setting::TIME_UNTIL_PEER_LOST_MILLISEC+500));
 
     /*--------------------SINGLE ELEVATOR---------------------*/
     let elevator = e::ElevatorHW::init(&elev_hw_server[..], setting::ELEV_NUM_FLOORS)?;
@@ -104,7 +106,7 @@ fn main() -> std::io::Result<()> {
 
     /*--------------------NETWORK MESSAGE HANDLERS--------------------*/
     /* The sender for peer discovery */
-    let (peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
+    let (_peer_tx_enable_tx, peer_tx_enable_rx) = cbc::unbounded::<bool>();
     /* Transmit local elevator info on network */
     let (local_elev_info_to_transmit_tx, local_elev_info_to_transmit_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || 
@@ -128,7 +130,7 @@ fn main() -> std::io::Result<()> {
 
     {
         let local_order_assign_tx = assign_orders_locally_tx.clone();
-        spawn(move || order_assigner::order_receiver::hall_order_receiver(local_order_assign_tx, set_pending_tx));
+        spawn(move || order_assigner::order_receiver::hall_order_receiver(local_order_assign_tx));
     }
 
 

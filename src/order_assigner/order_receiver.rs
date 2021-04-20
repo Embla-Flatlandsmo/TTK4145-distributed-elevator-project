@@ -7,7 +7,7 @@ use crate::local_elevator::fsm::elevatorfsm::ElevatorInfo;
 
 use crate::util::constants as setting;
 
-pub fn hall_order_receiver(assign_orders_locally_tx: cbc::Sender<CallButton>, set_pending_tx: cbc::Sender<(bool, usize, CallButton)>) {
+pub fn hall_order_receiver(assign_orders_locally_tx: cbc::Sender<CallButton>) {
     // The reciever for orders
     let (order_recv_tx, order_recv_rx) = cbc::unbounded::<(usize, CallButton)>();
     spawn(move || {
@@ -21,8 +21,6 @@ pub fn hall_order_receiver(assign_orders_locally_tx: cbc::Sender<CallButton>, se
         let call_button = order.1;
         if id == setting::ID {
             assign_orders_locally_tx.send(call_button).unwrap();
-        } else {
-            set_pending_tx.send((true, id, call_button)).unwrap();
         }
     }
 }

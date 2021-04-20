@@ -72,6 +72,12 @@ impl Elevator {
                 dirn: elevio::DIRN_DOWN,
             })
             .unwrap();
+        // Disable all lights when we first start
+        for f in 0..setting::ELEV_NUM_FLOORS {
+            for c in 0..3 {
+                hw_commander.send(elevio::HardwareCommand::CallButtonLight{floor: f, call: c, on: false}).unwrap();
+            }
+        }        
         return Elevator {
             hw_tx: hw_commander,
             timer_start_tx: timer_start_tx,
@@ -185,12 +191,11 @@ impl Elevator {
             }
             State::Initializing => {
                 self.hw_tx
-                    .send(elevio::HardwareCommand::MotorDirection {
-                        dirn: elevio::DIRN_STOP,
-                    })
-                    .unwrap();
-                self.info.state = State::Idle;
-                self.state_update_tx.send(State::Idle).unwrap();
+                .send(elevio::HardwareCommand::DoorLight { on: true })
+                .unwrap();
+                self.info.state = State::DoorOpen;
+                self.state_update_tx.send(State::DoorOpen).unwrap();
+                self.timer_start_tx.send(TimerCommand::Start).unwrap();
             }
             State::MovTimedOut => {
                 self.hw_tx
