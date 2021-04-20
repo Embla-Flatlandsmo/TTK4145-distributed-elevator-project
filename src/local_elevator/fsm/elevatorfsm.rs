@@ -51,10 +51,9 @@ pub enum Event {
 
 /// Contains all we need to know about our elevator.
 /// * `hw_tx` the transmitter for sending hardware commands
-/// * `state` what the elevator is currently doing
-/// * `dirn` the direction that the elevator last moved in (for direction conservation when picking where to go next)
-/// * `floor` the last floor the elevator was at
-/// * `orders` list of orders that the elevator will service
+/// * `timer_start_tx` the transmitter for starting the door timer
+/// * `state_update_tx` the transmitter for door 
+/// * `info` information about the elevator: `state`, `dirn`, `floor` and `responsible_orders`
 #[derive(Clone, Debug)]
 pub struct Elevator {
     hw_tx: crossbeam_channel::Sender<elevio::HardwareCommand>,

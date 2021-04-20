@@ -171,9 +171,7 @@ fn main() -> std::io::Result<()> {
         });
 
     /*----------------LOOP FOR LOCAL ELEVATOR INPUT---------------------*/
-
-    let mut when_state_updated = time::Instant::now();
-    let mut timeout_duration = time::Duration::from_secs(setting::MOTOR_TIMEOUT_DURATION_SEC);
+    
     let (elev_timeout_tx, elev_timeout_rx) = cbc::unbounded::<()>();
     spawn(move || local_elevator::fsm::elevatorfsm::state_timeout_checker(state_updater_rx, elev_timeout_tx));
     
