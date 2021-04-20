@@ -89,9 +89,9 @@ impl OrderList {
         }
     }
 
-    pub fn change_all_assigned_order_status(&mut self, active_or_pending: OrderType) {
+    pub fn change_all_assigned_hall_order_status(&mut self, active_or_pending: OrderType) {
         for f in 0..self.n_floors {
-            for c in 0..=2 {
+            for c in 0..=1 {
                 let btn = elevio::CallButton{floor: f as u8, call: c};
                 if self.is_active(btn) || self.is_pending(btn) {
                     self.modify_order(btn, active_or_pending)

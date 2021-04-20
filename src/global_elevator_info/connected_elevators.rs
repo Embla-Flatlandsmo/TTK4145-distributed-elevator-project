@@ -37,7 +37,6 @@ impl ConnectedElevatorInfo {
             fix_len_remote_elev_update[elev.get_id()] = Some(elev.clone());
         }
         
-        println!("{:#?}", fix_len_remote_elev_update.clone());
         for i in 0..MAX_NUM_ELEV {
             if i != LOCAL_ID {
                 let mut remote_info: ElevatorInfo;
@@ -68,6 +67,7 @@ impl ConnectedElevatorInfo {
                 }
             }
         }
+        println!("{:#?}", new_connected_elev_info.clone());
         self.connected_elevators = new_connected_elev_info;
         return lost_orders;
     }

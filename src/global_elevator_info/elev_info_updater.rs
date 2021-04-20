@@ -75,9 +75,7 @@ pub fn remote_elev_info_rx<T: serde::de::DeserializeOwned>(
 
         let r = elev_info_recv_rx.recv_timeout(timeout);
         let now = time::Instant::now();
-        
-        // Find new peers transmitting elevator info
-        // TODO: Make this receiver use bcast::rx?
+
         match r {
             Ok(val) => {
                 let elev_info = val.clone();

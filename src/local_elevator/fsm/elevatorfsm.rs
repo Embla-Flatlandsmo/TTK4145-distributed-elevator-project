@@ -1,9 +1,11 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_mut, unused_variables)]
 use crate::local_elevator::elevio::elev as elevio;
 use crate::local_elevator::elevio::poll;
 use crate::local_elevator::fsm::order_list;
+use crate::local_elevator::fsm::order_list::OrderType;
 use crate::util::constants as setting;
 use serde;
+use std::time;
 
 #[path = "./direction_decider.rs"]
 mod direction_decider;
@@ -77,7 +79,10 @@ impl Elevator {
             for c in 0..3 {
                 hw_commander.send(elevio::HardwareCommand::CallButtonLight{floor: f, call: c, on: false}).unwrap();
             }
-        }        
+        }
+        hw_commander.send(elevio::HardwareCommand::StopLight{on: false}).unwrap();
+        hw_commander.send(elevio::HardwareCommand::DoorLight{on: false}).unwrap();   
+
         return Elevator {
             hw_tx: hw_commander,
             timer_start_tx: timer_start_tx,
@@ -193,11 +198,16 @@ impl Elevator {
                 self.hw_tx
                 .send(elevio::HardwareCommand::DoorLight { on: true })
                 .unwrap();
+                self.hw_tx
+                .send(elevio::HardwareCommand::MotorDirection {
+                    dirn: elevio::DIRN_STOP,
+                }).unwrap();
                 self.info.state = State::DoorOpen;
                 self.state_update_tx.send(State::DoorOpen).unwrap();
                 self.timer_start_tx.send(TimerCommand::Start).unwrap();
             }
             State::MovTimedOut => {
+                self.info.responsible_orders.change_all_assigned_hall_order_status(OrderType::Active);
                 self.hw_tx
                     .send(elevio::HardwareCommand::MotorDirection {
                         dirn: elevio::DIRN_STOP,
@@ -276,30 +286,12 @@ impl Elevator {
         let state = self.get_state();
         match state {
             State::Obstructed => {
-                /* 
-                TODO: Discuss how to handle this.
-                See connected_elevators line 59-62
-                Should the elevator clear its own orders like this? Feels sorta risky (what if obstr timeout when no network?)
-                Better to just keep the orders? Set them to pending?
-                
-                let prev_inside_orders = self.get_orders().inside_queue.clone();
-                self.info.responsible_orders.clear_all_orders();
-                self.info.responsible_orders.inside_queue = prev_inside_orders;
-                */
                 self.info.state = State::ObstrTimedOut;
                 self.state_update_tx.send(State::ObstrTimedOut).unwrap();
             }
             State::Moving | State::Initializing => {
-                /* 
-                TODO: Discuss how to handle this.
-                See connected_elevators line 59-62
-                Should the elevator clear its own orders like this?
-
-                let prev_inside_orders = self.get_orders().inside_queue.clone();
-                self.info.responsible_orders.clear_all_orders();
-                self.info.responsible_orders.inside_queue = prev_inside_orders;
-                */
                 self.info.state = State::MovTimedOut;
+                self.info.responsible_orders.change_all_assigned_hall_order_status(OrderType::Pending);
                 self.state_update_tx.send(State::MovTimedOut).unwrap();
             }
             _ => {}
@@ -320,6 +312,38 @@ pub fn create_simulation_elevator(
         info: elev_info.clone(),
     };
 }
+
+
+pub fn state_timeout_checker(state_updater_rx: cbc::Receiver<State>, elev_timeout_tx: cbc::Sender<()>) {
+    let mut when_state_updated = time::Instant::now();
+    let mut timeout_duration = time::Duration::from_secs(setting::MOTOR_TIMEOUT_DURATION_SEC);
+    loop {
+        match state_updater_rx.try_recv() {
+            Ok(val) => {
+                when_state_updated = time::Instant::now();
+                let state = val;
+                match state {
+                    State::Obstructed => {
+                        timeout_duration = time::Duration::from_secs(setting::OBSTRUCTED_TIME_BEFORE_REASSIGN_SEC);
+                    },
+                    State::Moving | State::Initializing => {
+                        timeout_duration = time::Duration::from_secs(setting::MOTOR_TIMEOUT_DURATION_SEC);
+                    },
+                    _ => {
+                        timeout_duration = time::Duration::new(u64::MAX,0);
+                    },
+                }
+            },
+            _ => {}
+        }
+        let now = time::Instant::now();
+        if now.duration_since(when_state_updated) > timeout_duration {
+            elev_timeout_tx.send(()).unwrap();
+        }
+    }
+}
+
+
 
 #[cfg(test)]
 mod test {
