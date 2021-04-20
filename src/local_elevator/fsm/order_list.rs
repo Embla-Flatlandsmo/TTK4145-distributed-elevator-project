@@ -1,8 +1,8 @@
 //! Fast and easy order management to be used for both local and global queues!
-#![allow(dead_code)]
-use crate::local_elevator::elevio::poll as elevio;
 use serde;
 use std::vec::Vec;
+
+use crate::local_elevator::elevio::poll as elevio;
 
 #[derive(PartialEq, Copy, Clone, Debug, serde::Serialize, serde::Deserialize, Hash)]
 pub enum OrderType {
@@ -127,60 +127,5 @@ impl OrderList {
             2 => self.inside_queue[usize::from(button.floor)] = order_type,
             _ => unreachable!(),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::local_elevator::elevio::poll::CallButton;
-    #[test]
-    fn it_correctly_adds_orders() {
-        let mut order_list = OrderList::new(5);
-        order_list.set_active(CallButton { floor: 3, call: 0 });
-        order_list.set_active(CallButton { floor: 1, call: 2 });
-        let mut reference_order_list = OrderList::new(5);
-        reference_order_list.up_queue[3] = OrderType::Active;
-        reference_order_list.inside_queue[1] = OrderType::Active;
-        assert!((order_list == reference_order_list));
-    }
-
-    #[test]
-    fn it_correctly_clears_single_order() {
-        let mut order_list = OrderList::new(5);
-        order_list.set_active(CallButton { floor: 3, call: 0 });
-        order_list.set_active(CallButton { floor: 1, call: 2 });
-        order_list.remove_order(CallButton { floor: 3, call: 0 });
-        order_list.remove_order(CallButton { floor: 1, call: 2 });
-        let reference_order_list = OrderList::new(5);
-        assert!((order_list == reference_order_list));
-    }
-
-    #[test]
-    fn it_correctly_clears_floor_order() {
-        let mut order_list = OrderList::new(5);
-        order_list.set_active(CallButton { floor: 2, call: 0 });
-        order_list.set_active(CallButton { floor: 2, call: 1 });
-        order_list.set_active(CallButton { floor: 2, call: 2 });
-        order_list.clear_orders_on_floor(2);
-        let reference_order_list = OrderList::new(5);
-        assert!((order_list == reference_order_list));
-    }
-
-    #[test]
-    fn it_correctly_clears_all_orders() {
-        let mut order_list = OrderList::new(5);
-        order_list.set_active(CallButton { floor: 4, call: 0 });
-        order_list.set_active(CallButton { floor: 2, call: 0 });
-        order_list.set_active(CallButton { floor: 3, call: 2 });
-        order_list.clear_all_orders();
-        let reference_order_list = OrderList::new(5);
-        assert!((order_list == reference_order_list));
-    }
-    #[test]
-    fn it_correctly_detects_pending_order() {
-        let mut order_list = OrderList::new(5);
-        order_list.set_pending(true, CallButton { floor: 4, call: 0 });
-        assert!(order_list.is_pending(CallButton { floor: 4, call: 0 }));
     }
 }

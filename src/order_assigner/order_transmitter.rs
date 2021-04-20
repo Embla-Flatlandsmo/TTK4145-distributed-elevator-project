@@ -1,13 +1,16 @@
+use crossbeam_channel as cbc;
+use std::thread::*;
+
+use crate::util::constants as setting;
 use crate::global_elevator_info::connected_elevators::ConnectedElevatorInfo;
 use crate::local_elevator::elevio::poll::{CallButton, CAB};
-use crossbeam_channel as cbc;
-use crate::util::constants as setting;
-use std::thread::*;
 
 #[path = "./cost_function.rs"]
 mod cost_function;
 
-pub fn hall_order_transmitter(connected_info_ch: cbc::Receiver<ConnectedElevatorInfo>,
+
+pub fn hall_order_transmitter(
+    connected_info_ch: cbc::Receiver<ConnectedElevatorInfo>,
     call_button_recv: cbc::Receiver<CallButton>,
     set_pending: cbc::Sender<(bool, usize, CallButton)>,
     assign_order_locally: cbc::Sender<CallButton>) {
@@ -19,7 +22,7 @@ pub fn hall_order_transmitter(connected_info_ch: cbc::Receiver<ConnectedElevator
 
     {
     spawn(move || {
-        crate::network_interface::bcast::tx(setting::ORDER_PORT, send_bcast_rx, 3);
+        crate::network_interface::bcast::tx(setting::ORDER_PORT, send_bcast_rx, 5);
     });
     }
 
@@ -68,7 +71,9 @@ pub fn hall_order_transmitter(connected_info_ch: cbc::Receiver<ConnectedElevator
     }
 }
 
-pub fn cab_order_backup_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std::marker::Send>(elev_info_rx: cbc::Receiver::<ElevatorInfo>){
+pub fn cab_order_backup_tx<ElevatorInfo: 'static + Clone + serde::Serialize + std::marker::Send>(
+    elev_info_rx: cbc::Receiver::<ElevatorInfo>){
+
     let (send_bcast_tx, send_bcast_rx) = cbc::unbounded::<ElevatorInfo>();
     spawn(move || {
         crate::network_interface::bcast::tx(setting::CAB_BACKUP_PORT, send_bcast_rx, 10);
@@ -78,7 +83,7 @@ pub fn cab_order_backup_tx<ElevatorInfo: 'static + Clone + serde::Serialize + st
         cbc::select! {
             recv(elev_info_rx) -> new_info => {
                 let elev_info = new_info.unwrap();
-                send_bcast_tx.send(elev_info.clone()).unwrap(); //cab_order_backup_rx on other nodes get this
+                send_bcast_tx.send(elev_info.clone()).unwrap();
             }
         }
     }

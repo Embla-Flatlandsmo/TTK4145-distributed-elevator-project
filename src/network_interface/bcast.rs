@@ -1,10 +1,8 @@
-
 use crossbeam_channel as cbc;
 use serde;
 
 #[path = "./sock.rs"]
 mod sock;
-
 
 
 pub fn tx<T: Clone + serde::Serialize>(port: u16, ch: cbc::Receiver<T>, burst_size: usize){
@@ -17,8 +15,8 @@ pub fn tx<T: Clone + serde::Serialize>(port: u16, ch: cbc::Receiver<T>, burst_si
         for _i in 0..burst_size {
             let res = s.send(serialized.as_bytes());
             match res {
-                Ok(_res) => {},
-                Err(_res) => {println!("Couldn't send bcast :(((((");}
+                Ok(_) => {},
+                Err(_) => {println!("Couldn't send bcast :((");}
             }
         }
     }
@@ -34,7 +32,7 @@ pub fn rx<T: serde::de::DeserializeOwned>(port: u16, ch: cbc::Sender<T>){
         // Only send the message on crossbeam channel if it actually is the data we want
         match serde_json::from_str::<T>(&msg) {
             Ok(data) => ch.send(data).unwrap(),
-            _ => {println!("Wrong data type!!!!")}
+            Err(_) => {println!("Received wrong data type!!")}
         }
     }
 }

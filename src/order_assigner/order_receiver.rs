@@ -4,8 +4,8 @@ use crossbeam_channel as cbc;
 
 use crate::local_elevator::elevio::poll::{CallButton, CAB};
 use crate::local_elevator::fsm::elevatorfsm::ElevatorInfo;
-
 use crate::util::constants as setting;
+
 
 pub fn hall_order_receiver(assign_orders_locally_tx: cbc::Sender<CallButton>) {
     // The reciever for orders
@@ -25,8 +25,8 @@ pub fn hall_order_receiver(assign_orders_locally_tx: cbc::Sender<CallButton>) {
     }
 }
 
-
 pub fn cab_order_backup_rx<T: serde::de::DeserializeOwned>(assign_cab_orders_locally_tx: cbc::Sender::<CallButton>) {
+
     let start_time = time::Instant::now();
     let timeout = time::Duration::from_millis(500);
 
@@ -35,7 +35,7 @@ pub fn cab_order_backup_rx<T: serde::de::DeserializeOwned>(assign_cab_orders_loc
         crate::network_interface::bcast::rx(setting::CAB_BACKUP_PORT, cab_backup_recv_tx);
     });
 
-    while time::Instant::now().duration_since(start_time)<time::Duration::from_millis(5000){
+    while time::Instant::now().duration_since(start_time)<time::Duration::from_secs(5){
         let r = cab_backup_recv_rx.recv_timeout(timeout);
          match r {
             Ok(val) => {
@@ -52,7 +52,7 @@ pub fn cab_order_backup_rx<T: serde::de::DeserializeOwned>(assign_cab_orders_loc
                 }
 
             }
-            Err(_e) => {},
+            Err(_) => {},
         }
     }
 

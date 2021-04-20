@@ -1,33 +1,17 @@
-#![allow(dead_code, unused_mut, unused_variables)]
+//#![allow(dead_code, unused_mut, unused_variables)]
+use serde;
+use std::time;
+use crossbeam_channel as cbc;
+
 use crate::local_elevator::elevio::elev as elevio;
 use crate::local_elevator::elevio::poll;
 use crate::local_elevator::fsm::order_list;
 use crate::local_elevator::fsm::order_list::OrderType;
 use crate::util::constants as setting;
-use serde;
-use std::time;
+use crate::local_elevator::fsm::door_timer::TimerCommand;
 
 #[path = "./direction_decider.rs"]
 mod direction_decider;
-
-use crate::local_elevator::fsm::door_timer::TimerCommand;
-
-use crossbeam_channel as cbc;
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
-pub struct ElevatorInfo {
-    pub id: usize,
-    pub state: State,
-    pub dirn: u8,
-    pub floor: u8,
-    pub responsible_orders: order_list::OrderList,
-}
-
-impl ElevatorInfo {
-    pub fn get_id(&self) -> usize {
-        return self.clone().id;
-    }
-}
 
 #[derive(Copy, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, Hash)]
 pub enum State {
@@ -47,6 +31,21 @@ pub enum Event {
     OnNewOrder { btn: poll::CallButton },
     OnObstructionSignal { active: bool },
     OnStateTimeOut,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
+pub struct ElevatorInfo {
+    pub id: usize,
+    pub state: State,
+    pub dirn: u8,
+    pub floor: u8,
+    pub responsible_orders: order_list::OrderList,
+}
+
+impl ElevatorInfo {
+    pub fn get_id(&self) -> usize {
+        return self.clone().id;
+    }
 }
 
 /// Contains all we need to know about our elevator.
@@ -343,194 +342,3 @@ pub fn state_timeout_checker(state_updater_rx: cbc::Receiver<State>, elev_timeou
     }
 }
 
-
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    fn initialize_elevator(
-        arriving_floor: u8,
-        hardware_command_tx: cbc::Sender<elevio::HardwareCommand>,
-        door_timer_start_tx: cbc::Sender<TimerCommand>,
-        state_updater_tx: cbc::Sender<State>,
-    ) -> Elevator {
-        let mut elevator =
-            Elevator::new(hardware_command_tx, door_timer_start_tx, state_updater_tx);
-        elevator.on_event(Event::OnFloorArrival {
-            floor: arriving_floor,
-        });
-        return elevator;
-    }
-    #[test]
-    fn it_initializes_correctly() {
-        let (hw_tx, _hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let (timer_tx, _timer_rx) = cbc::unbounded::<TimerCommand>();
-        let (state_updater_tx, _state_updater_rx) = cbc::unbounded::<State>();
-
-        let elevator = initialize_elevator(2, hw_tx, timer_tx, state_updater_tx);
-        let elevator_state = elevator.get_state();
-        assert!((elevator.get_floor() == 2) && (elevator_state == State::Idle));
-    }
-
-    #[test]
-    fn it_opens_the_door_when_order_on_current_floor() {
-        let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let (timer_tx, _timer_rx) = cbc::unbounded::<TimerCommand>();
-        let (state_updater_tx, _state_updater_rx) = cbc::unbounded::<State>();
-
-        let mut elevator = initialize_elevator(2, hw_tx, timer_tx, state_updater_tx);
-        while !hw_rx.is_empty() {
-            hw_rx.recv().unwrap();
-        }
-        elevator.on_event(Event::OnNewOrder {
-            btn: poll::CallButton { floor: 3, call: 2 },
-        });
-        hw_rx.recv().unwrap();
-        assert_eq!(
-            hw_rx.recv(),
-            Ok(elevio::HardwareCommand::DoorLight { on: true })
-        );
-    }
-
-    #[test]
-    fn it_goes_up_when_order_is_above() {
-        let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let (timer_tx, _timer_rx) = cbc::unbounded::<TimerCommand>();
-        let (state_updater_tx, _state_updater_rx) = cbc::unbounded::<State>();
-
-        let mut elevator = initialize_elevator(2, hw_tx, timer_tx, state_updater_tx);
-        while !hw_rx.is_empty() {
-            hw_rx.recv().unwrap();
-        }
-        elevator.on_event(Event::OnNewOrder {
-            btn: poll::CallButton { floor: 4, call: 1 },
-        });
-
-        hw_rx.recv().unwrap();
-        assert_eq!(
-            hw_rx.recv(),
-            Ok(elevio::HardwareCommand::MotorDirection {
-                dirn: elevio::DIRN_UP
-            })
-        );
-    }
-
-    #[test]
-    fn it_goes_down_when_order_is_below() {
-        let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let (timer_tx, _timer_rx) = cbc::unbounded::<TimerCommand>();
-        let (state_updater_tx, _state_updater_rx) = cbc::unbounded::<State>();
-
-        let mut elevator = initialize_elevator(2, hw_tx, timer_tx, state_updater_tx);
-        while !hw_rx.is_empty() {
-            hw_rx.recv().unwrap();
-        }
-        elevator.on_event(Event::OnNewOrder {
-            btn: poll::CallButton { floor: 0, call: 1 },
-        });
-        hw_rx.recv().unwrap();
-        assert_eq!(
-            hw_rx.recv(),
-            Ok(elevio::HardwareCommand::MotorDirection {
-                dirn: elevio::DIRN_DOWN
-            })
-        );
-    }
-
-    #[test]
-    fn it_opens_door_at_ordered_floor() {
-        let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let (timer_tx, _timer_rx) = cbc::unbounded::<TimerCommand>();
-        let (state_updater_tx, _state_updater_rx) = cbc::unbounded::<State>();
-
-        let mut elevator = initialize_elevator(2, hw_tx, timer_tx, state_updater_tx);
-        while !hw_rx.is_empty() {
-            hw_rx.recv().unwrap();
-        }
-        elevator.on_event(Event::OnNewOrder {
-            btn: poll::CallButton { floor: 0, call: 0 },
-        });
-        elevator.on_event(Event::OnFloorArrival { floor: 1 });
-        elevator.on_event(Event::OnFloorArrival { floor: 0 });
-        assert_eq!(elevator.get_state(), State::DoorOpen);
-    }
-
-    #[test]
-    fn it_sends_timer_signal_when_door_opened() {
-        let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let (timer_tx, timer_rx) = cbc::unbounded::<TimerCommand>();
-        let (state_updater_tx, _state_updater_rx) = cbc::unbounded::<State>();
-
-        let mut elevator = initialize_elevator(2, hw_tx, timer_tx, state_updater_tx);
-        while !hw_rx.is_empty() {
-            hw_rx.recv().unwrap();
-        }
-        elevator.on_event(Event::OnNewOrder {
-            btn: poll::CallButton { floor: 0, call: 1 },
-        });
-        elevator.on_event(Event::OnFloorArrival { floor: 1 });
-        elevator.on_event(Event::OnFloorArrival { floor: 0 });
-        assert_eq!(timer_rx.recv(), Ok(TimerCommand::Start));
-    }
-
-    #[test]
-    fn it_goes_to_idle_when_no_orders_found() {
-        let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let (timer_tx, _timer_rx) = cbc::unbounded::<TimerCommand>();
-        let (state_updater_tx, _state_updater_rx) = cbc::unbounded::<State>();
-
-        let mut elevator = initialize_elevator(2, hw_tx, timer_tx, state_updater_tx);
-        while !hw_rx.is_empty() {
-            hw_rx.recv().unwrap();
-        }
-        elevator.on_event(Event::OnNewOrder {
-            btn: poll::CallButton { floor: 0, call: 1 },
-        });
-        elevator.on_event(Event::OnFloorArrival { floor: 1 });
-        elevator.on_event(Event::OnFloorArrival { floor: 0 });
-        elevator.on_event(Event::OnDoorTimeOut);
-        assert_eq!(elevator.get_state(), State::Idle);
-    }
-
-    #[test]
-    fn it_clears_orders_after_servicing_floor() {
-        let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let (timer_tx, _timer_rx) = cbc::unbounded::<TimerCommand>();
-        let (state_updater_tx, _state_updater_rx) = cbc::unbounded::<State>();
-
-        let mut elevator = initialize_elevator(2, hw_tx, timer_tx, state_updater_tx);
-        while !hw_rx.is_empty() {
-            hw_rx.recv().unwrap();
-        }
-        elevator.on_event(Event::OnNewOrder {
-            btn: poll::CallButton { floor: 0, call: 1 },
-        });
-        elevator.on_event(Event::OnFloorArrival { floor: 1 });
-        elevator.on_event(Event::OnFloorArrival { floor: 0 });
-        elevator.on_event(Event::OnDoorTimeOut);
-        let ref_orders = order_list::OrderList::new(5);
-        assert_eq!(elevator.get_orders(), ref_orders);
-    }
-
-    #[test]
-    fn it_services_next_order_after_door_closed() {
-        let (hw_tx, hw_rx) = cbc::unbounded::<elevio::HardwareCommand>();
-        let (timer_tx, _timer_rx) = cbc::unbounded::<TimerCommand>();
-        let (state_updater_tx, _state_updater_rx) = cbc::unbounded::<State>();
-
-        let mut elevator = initialize_elevator(2, hw_tx, timer_tx, state_updater_tx);
-        while !hw_rx.is_empty() {
-            hw_rx.recv().unwrap();
-        }
-        elevator.on_event(Event::OnNewOrder {
-            btn: poll::CallButton { floor: 0, call: 1 },
-        });
-        elevator.on_event(Event::OnNewOrder {
-            btn: poll::CallButton { floor: 4, call: 2 },
-        });
-        elevator.on_event(Event::OnFloorArrival { floor: 1 });
-        elevator.on_event(Event::OnFloorArrival { floor: 0 });
-        elevator.on_event(Event::OnDoorTimeOut);
-        assert_eq!(elevator.get_state(), State::Moving);
-    }
-}

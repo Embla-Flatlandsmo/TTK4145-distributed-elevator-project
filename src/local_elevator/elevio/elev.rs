@@ -1,21 +1,19 @@
-#![allow(dead_code)]
+//#![allow(dead_code)]
 
 use std::net::TcpStream;
 use std::sync::*;
 use std::fmt;
 use std::io::*;
 
+pub const DIRN_DOWN:    u8 = u8::MAX;
+pub const DIRN_STOP:    u8 = 0;
+pub const DIRN_UP:      u8 = 1;
 
 #[derive(Clone, Debug)]
 pub struct ElevatorHW {
         socket:     Arc<Mutex<TcpStream>>,
     pub num_floors: u8,
 }
-
-
-pub const DIRN_DOWN:    u8 = u8::MAX;
-pub const DIRN_STOP:    u8 = 0;
-pub const DIRN_UP:      u8 = 1;
 
 #[derive(PartialEq, Debug)]
 pub enum HardwareCommand{
@@ -25,6 +23,7 @@ pub enum HardwareCommand{
     StopLight{on: bool},
     FloorLight{floor: u8}
 }
+
 
 impl ElevatorHW {
 

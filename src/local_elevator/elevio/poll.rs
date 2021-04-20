@@ -4,15 +4,15 @@ use crossbeam_channel as cbc;
 use serde;
 use super::elev;
 
+pub const HALL_UP:      u8 = 0;
+pub const HALL_DOWN:    u8 = 1;
+pub const CAB:          u8 = 2;
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Copy, Clone)]
 pub struct CallButton {
     pub floor:  u8,
     pub call:   u8,
 }
-
-pub const HALL_UP:      u8 = 0;
-pub const HALL_DOWN:    u8 = 1;
-pub const CAB:          u8 = 2;
 
 
 pub fn call_buttons(elev: elev::ElevatorHW, ch: cbc::Sender<CallButton>, period: time::Duration){

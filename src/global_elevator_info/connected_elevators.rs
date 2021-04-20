@@ -1,12 +1,14 @@
+use crossbeam_channel as cbc;
+use std::time;
+use std::thread::*;
+
 use crate::local_elevator::elevio::poll::{CallButton, CAB};
 use crate::local_elevator::elevio::elev::HardwareCommand;
 use crate::local_elevator::fsm::elevatorfsm::{ElevatorInfo, State};
 use crate::local_elevator::fsm::order_list::{OrderList, OrderType};
-use crossbeam_channel as cbc;
-use std::time;
 use crate::util::constants::{MAX_NUM_ELEV, ELEV_NUM_FLOORS};
 use crate::util::constants::ID as LOCAL_ID;
-use std::thread::*;
+
 
 #[derive(Clone, Debug)]
 pub struct ConnectedElevatorInfo {
@@ -15,6 +17,7 @@ pub struct ConnectedElevatorInfo {
 
 impl ConnectedElevatorInfo {
     fn new(local_elev: ElevatorInfo, max_number_of_elevators: usize) -> ConnectedElevatorInfo {
+
         let mut connected_elevs: Vec<Option<ElevatorInfo>> = Vec::new();
         connected_elevs.resize_with(max_number_of_elevators, || None);
         connected_elevs[LOCAL_ID] = Some(local_elev.clone());
@@ -25,6 +28,7 @@ impl ConnectedElevatorInfo {
 
     /// Updates global info with the newest info received from remote elevators.
     fn update_remote_elevator_info(&mut self, remote_update: Vec<ElevatorInfo>) -> Vec<CallButton> {
+
         let mut new_connected_elev_info: Vec<Option<ElevatorInfo>> = Vec::new();
         new_connected_elev_info.resize_with(MAX_NUM_ELEV, || None);
         
@@ -187,7 +191,10 @@ pub fn connected_elevator_info(
     }
 }
 
-pub fn set_order_lights(global_info_rx: cbc::Receiver<ConnectedElevatorInfo>, set_lights_tx: cbc::Sender<HardwareCommand>) {
+pub fn set_order_lights(
+    global_info_rx: cbc::Receiver<ConnectedElevatorInfo>, 
+    set_lights_tx: cbc::Sender<HardwareCommand>) {
+
     let elev_num_floors = 4;
     let mut old_lights: OrderList = OrderList::new(elev_num_floors);
     loop {
@@ -211,7 +218,7 @@ pub fn set_order_lights(global_info_rx: cbc::Receiver<ConnectedElevatorInfo>, se
 }
 
 
-fn assign_orders_locally(orders_to_assign: OrderList) -> Vec<CallButton>{
+fn assign_orders_locally(orders_to_assign: OrderList) -> Vec<CallButton> {
     let n_floors: usize = orders_to_assign.up_queue.len();
     let mut call_buttons_to_assign: Vec<CallButton> = Vec::new();
     for f in 0..n_floors {
@@ -230,6 +237,7 @@ fn assign_orders_locally(orders_to_assign: OrderList) -> Vec<CallButton>{
 
 
 fn merge_remote_active(local_order_info: OrderList, remote_orders: OrderList) -> OrderList {
+
     let n_floors: usize = local_order_info.up_queue.len();
     let mut new_order_list: OrderList = OrderList::new(n_floors as u8);
     if n_floors != remote_orders.up_queue.len() {
@@ -254,6 +262,7 @@ fn merge_remote_active(local_order_info: OrderList, remote_orders: OrderList) ->
 /// Merges remote order into current order. It prioritizes remote order.
 /// A pending order can only be upgraded to active by `remote_order`.
 fn merge_remote_order(current_order: OrderType, remote_order: OrderType) -> OrderType {
+
     match current_order {
         OrderType::Pending => {
             if remote_order == OrderType::Active {
@@ -271,6 +280,7 @@ fn merge_remote_order(current_order: OrderType, remote_order: OrderType) -> Orde
 /// *`local_order_info` - The local knowledge of the orderlist of a remote elevator
 /// *`remote_orders` - The update received from the remote elevator
 fn merge_remote_orders(local_order_info: OrderList, remote_orders: OrderList) -> OrderList {
+
     let mut new_order_list: OrderList = OrderList::new(ELEV_NUM_FLOORS);
 
     if ELEV_NUM_FLOORS as usize != remote_orders.up_queue.len() {
@@ -290,218 +300,4 @@ fn merge_remote_orders(local_order_info: OrderList, remote_orders: OrderList) ->
         );
     }
     return new_order_list;
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::local_elevator::elevio::elev::*;
-    use crate::local_elevator::elevio::poll::CallButton;
-    use crate::local_elevator::fsm::elevatorfsm::State;
-    use crate::local_elevator::fsm::order_list::OrderList;
-    extern crate rand;
-    fn create_random_remote_order_list() -> OrderList {
-        let n_floors = 5;
-        let mut order_list = OrderList::new(n_floors);
-        for i in 0..n_floors - 1 {
-            if rand::random() {
-                order_list.set_active(CallButton {
-                    floor: i as u8,
-                    call: 0,
-                })
-            }
-        }
-        for i in 0..n_floors - 1 {
-            if rand::random() {
-                order_list.set_active(CallButton {
-                    floor: i as u8,
-                    call: 1,
-                })
-            }
-        }
-        return order_list;
-    }
-
-    fn create_random_remote_update() -> Vec<ElevatorInfo> {
-        let elev_id_0: ElevatorInfo = ElevatorInfo {
-            id: 0,
-            state: State::Moving,
-            dirn: DIRN_UP,
-            floor: 3,
-            responsible_orders: create_random_remote_order_list(),
-        };
-        let elev_id_1: ElevatorInfo = ElevatorInfo {
-            id: 1,
-            state: State::Moving,
-            dirn: DIRN_DOWN,
-            floor: 1,
-            responsible_orders: create_random_remote_order_list(),
-        };
-        let mut remote_update: Vec<ElevatorInfo> = Vec::new();
-        remote_update.push(elev_id_0);
-        remote_update.push(elev_id_1);
-        return remote_update;
-    }
-
-    fn create_empty_remote_update() -> Vec<ElevatorInfo> {
-        let elev_id_0: ElevatorInfo = ElevatorInfo {
-            id: 0,
-            state: State::Moving,
-            dirn: DIRN_UP,
-            floor: 3,
-            responsible_orders: OrderList::new(ELEV_NUM_FLOORS),
-        };
-        let elev_id_1: ElevatorInfo = ElevatorInfo {
-            id: 1,
-            state: State::Moving,
-            dirn: DIRN_DOWN,
-            floor: 1,
-            responsible_orders: OrderList::new(ELEV_NUM_FLOORS),
-        };
-        let mut remote_update: Vec<ElevatorInfo> = Vec::new();
-        remote_update.push(elev_id_0);
-        remote_update.push(elev_id_1);
-        return remote_update;
-    }
-
-    #[test]
-    fn it_updates_from_remote() {
-        let remote_update: Vec<ElevatorInfo> = create_random_remote_update();
-        let local_elev_info: ElevatorInfo = ElevatorInfo {
-            id: 2,
-            state: State::Moving,
-            dirn: DIRN_UP,
-            floor: 3,
-            responsible_orders: OrderList::new(5),
-        };
-        let mut connected_elevator_info: ConnectedElevatorInfo =
-            ConnectedElevatorInfo::new(local_elev_info, MAX_NUM_ELEV);
-        connected_elevator_info.update_remote_elevator_info(remote_update.clone());
-        let mut is_identical = true;
-        for elev in remote_update.iter().cloned() {
-            let elev_id: usize = elev.get_id();
-            if elev
-                != connected_elevator_info.get_connected_elevators()[elev_id]
-                    .clone()
-                    .unwrap()
-            {
-                is_identical = false;
-            }
-        }
-        assert!(is_identical);
-    }
-
-    #[test]
-    fn it_correctly_sets_pending_in_remote_elevators() {
-        let max_num_elev: usize = 10;
-        let local_elev_info: ElevatorInfo = ElevatorInfo {
-            id: 2,
-            state: State::Moving,
-            dirn: DIRN_UP,
-            floor: 3,
-            responsible_orders: OrderList::new(5),
-        };
-        let mut connected_elevator_info: ConnectedElevatorInfo =
-            ConnectedElevatorInfo::new(local_elev_info, max_num_elev);
-        connected_elevator_info.update_remote_elevator_info(create_empty_remote_update());
-        connected_elevator_info.set_to_pending(true, 0, CallButton { floor: 2, call: 1 });
-        assert!(connected_elevator_info.is_pending(0, CallButton { floor: 2, call: 1 }));
-    }
-    #[test]
-    fn it_correctly_updates_remote_pending_to_active() {
-        let max_num_elev = 10;
-        let local_elev_info: ElevatorInfo = ElevatorInfo {
-            id: 2,
-            state: State::Moving,
-            dirn: DIRN_UP,
-            floor: 3,
-            responsible_orders: OrderList::new(ELEV_NUM_FLOORS),
-        };
-
-        let mut connected_elevator_info: ConnectedElevatorInfo =
-            ConnectedElevatorInfo::new(local_elev_info, max_num_elev);
-        let mut remote_update = create_empty_remote_update();
-        connected_elevator_info.update_remote_elevator_info(remote_update.clone());
-        connected_elevator_info.set_to_pending(true, 0, CallButton { floor: 2, call: 1 });
-        remote_update[0]
-            .responsible_orders
-            .set_active(CallButton { floor: 2, call: 1 });
-        println!("{:#?}", remote_update[0].clone());
-        connected_elevator_info.update_remote_elevator_info(remote_update.clone());
-        assert!(connected_elevator_info.is_active(0, CallButton { floor: 2, call: 1 }));
-    }
-
-    #[test]
-    fn it_correctly_updates_local() {
-        let max_num_elev = 10;
-        let local_elev_info: ElevatorInfo = ElevatorInfo {
-            id: 2,
-            state: State::Moving,
-            dirn: DIRN_UP,
-            floor: 3,
-            responsible_orders: OrderList::new(5),
-        };
-
-        let mut connected_elevator_info: ConnectedElevatorInfo =
-            ConnectedElevatorInfo::new(local_elev_info, max_num_elev);
-
-        let local_elev_info_2: ElevatorInfo = ElevatorInfo {
-            id: 2,
-            state: State::Moving,
-            dirn: DIRN_UP,
-            floor: 4,
-            responsible_orders: OrderList::new(5),
-        };
-
-        connected_elevator_info.update_local_elevator_info(local_elev_info_2.clone());
-        assert_eq!(
-            connected_elevator_info.get_local_elevator_info().unwrap(),
-            local_elev_info_2
-        );
-    }
-
-    #[test]
-    fn it_does_not_overwrite_local() {
-        let local_elev_info: ElevatorInfo = ElevatorInfo {
-            id: 2,
-            state: State::Moving,
-            dirn: DIRN_UP,
-            floor: 3,
-            responsible_orders: OrderList::new(5),
-        };
-        // Attempt to overwrite local with 'bad' remote info
-        let bad_remote_elev_info: ElevatorInfo = ElevatorInfo {
-            id: 2,
-            state: State::Idle,
-            dirn: DIRN_UP,
-            floor: 1,
-            responsible_orders: OrderList::new(5),
-        };
-        let mut remote_update: Vec<ElevatorInfo> = Vec::new();
-        remote_update.push(bad_remote_elev_info);
-        let mut connected_elevator_info: ConnectedElevatorInfo =
-            ConnectedElevatorInfo::new(local_elev_info.clone(), 10);
-        connected_elevator_info.update_remote_elevator_info(remote_update);
-        assert_eq!(connected_elevator_info.get_local_elevator_info().unwrap(), local_elev_info);
-    }
-
-    #[test]
-    fn it_correctly_merges_remote_order_list() {
-        let mut order_list = OrderList::new(ELEV_NUM_FLOORS);
-        order_list.set_pending(true, CallButton { floor: 3, call: 0 });
-        order_list.set_pending(true, CallButton { floor: 1, call: 2 });
-        order_list.set_active(CallButton { floor: 0, call: 2 });
-
-        // Check: Is merging the lists the same as adding orders?
-        let mut order_list_to_compare = order_list.clone();
-        order_list_to_compare.set_active(CallButton { floor: 1, call: 0 });
-        order_list_to_compare.set_active(CallButton { floor: 0, call: 2 });
-
-        let mut order_list_update = OrderList::new(ELEV_NUM_FLOORS);
-        order_list_update.set_active(CallButton { floor: 1, call: 0 });
-        order_list_update.set_active(CallButton { floor: 0, call: 2 });
-
-        order_list = merge_remote_orders(order_list.clone(), order_list_update.clone());
-        assert_eq!(order_list, order_list_to_compare);
-    }
 }

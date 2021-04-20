@@ -1,17 +1,19 @@
 use crate::util::constants as setting;
 use crossbeam_channel as cbc;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TimerCommand {
+    Start,
+    Cancel,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct Timer {
     start_time: std::time::Instant,
     timeout_time: std::time::Duration,
     enabled: bool,
 }
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum TimerCommand {
-    Start,
-    Cancel,
-}
+
 
 impl Timer {
     fn new(timeout_sec: u64) -> Timer {
