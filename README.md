@@ -1,19 +1,22 @@
 Elevator Project
 ================
+The project has been to develop software for controlling `n` elevators working in parallel across `m` floors.
 
+A key requirement for the project is that no order is ever *not* serviced after the light first has turned on. To make sure of this, we have restricted the way elevators handle orders: If an elevator confirms that it will take the order, the **only way it can remove the order from its queue, is to actually service the order itself.** Active orders can be duplicated by other elevators on the network (and it is in the case of the elevator being obstructed for too long or motor power loss).
 
+For distributing orders (`order_transmitter.rs`) to the best fit elevator, the elevator whose panel button was pressed calculates the time to idle for each available elevator on the network, then sends a message to the best fit elevator. If the best fit elevator has not taken the order within a given amount of time, the elevator that tried to assign the order takes the order itself instead. In short, we have gone for a *try to assign to best fit elevator, take it myself if the elevator ignores me*-approach.
 
+Each elevator has an overview of all the other elevators on the network (including itself), see  `global_elevator_info/connected_elevators.rs`. The overview of other elevators is continually updated from `elev_info_updater.rs`, which helps keep track of how long it has been since an elevator was last seen on the network.
 
-Module diagram (Work in progress)
+The control of the local elevator is mainly done in `local_elevator/fsm`. The elevator has been implemented as a finite state machine whose events come from the loop in `main.rs`. These are events such as *"Arrived on new floor"*, *"Obstruction signal active"*, *"New order was assigned"* and "*Door timer has timed out*" In order to detect motor power loss, we also implemented a *Movement Timeout* state which the elevator enters if "I have tried to go somewhere, but I have not arrived anywhere in quite some time".
+
+Finally, most of the interesting settings in our project is given in `util/constants.rs`. This is also where you have to set the ID of the elevator. It is important that the ID of the elevator is unique on the network, otherwise we
+
+To run this project
 -----
-![Module diagram](./modules.png)
+If you want to test this from home, you can use the [simulator](https://github.com/TTK4145/Simulator-v2) provided in the course. To run our software on different simulator ports, call the command `cargo run SIMULATOR_PORT`. If you want to run multiple elevators on the same network, it is important to **change the ID** of the elevator!
 
-FSM (What's been implemented so far)
-----
-![FSM](./fsm.png)
-
-
-Provided text below
+Provided text
 ========
 
 Summary
