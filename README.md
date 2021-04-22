@@ -1,6 +1,6 @@
 Elevator Project
 ================
-The project has been to develop software for controlling `n` elevators working in parallel across `m` floors.
+The project has been to develop software for controlling `n` elevators working in parallel across `m` floors. Packet loss, network loss, and power loss may occur at any time. This project scored 100% on the FAT.
 
 A key requirement for the project is that no order is ever *not* serviced after the light first has turned on. To make sure of this, we have restricted the way elevators handle orders: If an elevator confirms that it will take the order, the **only way it can remove the order from its queue, is to actually service the order itself.** Active orders can be duplicated by other elevators on the network (and it is in the case of the elevator being obstructed for too long or motor power loss).
 
@@ -10,7 +10,7 @@ Each elevator has an overview of all the other elevators on the network (includi
 
 The control of the local elevator is mainly done in `local_elevator/fsm`. The elevator has been implemented as a finite state machine whose events come from the loop in `main.rs`. These are events such as *"Arrived on new floor"*, *"Obstruction signal active"*, *"New order was assigned"* and "*Door timer has timed out*" In order to detect motor power loss, we also implemented a *Movement Timeout* state which the elevator enters if "I have tried to go somewhere, but I have not arrived anywhere in quite some time".
 
-Finally, most of the interesting settings in our project is given in `util/constants.rs`. This is also where you have to set the ID of the elevator. It is important that the ID of the elevator is unique on the network, otherwise we
+Finally, most of the interesting settings in our project is given in `util/constants.rs`. This is also where you have to set the ID of the elevator. It is important that the ID of the elevator is unique on the network.
 
 To run this project
 -----
